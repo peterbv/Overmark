@@ -13,8 +13,19 @@ import SwiftUI
 /// id so the bar never leaks into exported screenshots.
 @MainActor
 final class AnnotationToolbarController {
+    private static let barSize = NSSize(width: 680, height: 104)
+
     private let coordinator: AppCoordinator
     private var panel: OverlayPanel?
+
+    /// Expanded (all controls) vs collapsed into a corner tab by the
+    /// auto-hide behaviour.
+    private var isExpanded = true
+    /// Pin button in the toolbar: collapse to a small tab when the
+    /// cursor is away, expand on hover.
+    private var isAutoHide = false
+    private var autoCollapseTask: Task<Void, Never>?
+    private var shortcutsWindow: HelpPanel?
 
     init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
@@ -24,7 +35,7 @@ final class AnnotationToolbarController {
     func show(on screen: NSScreen) {
         hide()
 
-        let size = NSSize(width: 680, height: 104)
+        let size = Self.barSize
         let frame = screen.frame
         let menuBarHeight = max(frame.height - screen.visibleFrame.height, 0)
         let rect = NSRect(
@@ -42,26 +53,185 @@ final class AnnotationToolbarController {
         // Drag anywhere on the toolbar background to reposition it; button
         // hits still take precedence over the window-move gesture.
         panel.isMovableByWindowBackground = true
-        panel.contentView = NSHostingView(rootView: AnnotationToolbarView(coordinator: coordinator))
-        // `isMovableByWindowBackground` cannot move a window whose content
-        // view is an NSHostingView — SwiftUI consumes the clicks — so a
-        // dedicated grip strip drives the standard window-drag machinery.
-        let handle = DragHandleView(
-            frame: NSRect(x: size.width / 2 - 40, y: size.height - 16, width: 80, height: 12)
+        isExpanded = true
+        panel.contentView = makeExpandedContent(
+            handleFrame: NSRect(x: size.width / 2 - 40, y: size.height - 16, width: 80, height: 12)
         )
-        handle.toolTip = L10n.tr("Drag here to move the toolbar")
-        panel.contentView?.addSubview(handle)
         panel.orderFrontRegardless()
 
         self.panel = panel
     }
 
-    /// Removes the bar.
+    /// Removes the bar (and the shortcut cheat-sheet).
     func hide() {
+        autoCollapseTask?.cancel()
+        autoCollapseTask = nil
+        closeShortcutsWindow()
         panel?.dismiss()
         panel?.contentView = nil
         panel?.close()
         panel = nil
+    }
+
+    // MARK: Auto-hide docking
+
+    /// Rebuilds the expanded HUD: SwiftUI controls + a hover-tracking
+    /// view + the drag handle.
+    private func makeExpandedContent(handleFrame: NSRect) -> NSView {
+        let hosting = self.hosting(for: handleFrame)
+
+        let hover = HoverPassThruView(frame: .zero)
+        hover.onEnter = { [weak self] in self?.handleHoverEnter() }
+        hover.onExit = { [weak self] in self?.handleHoverExit() }
+        hover.autoresizingMask = [.width, .height]
+        hosting.addSubview(hover)
+
+        let handle = DragHandleView(frame: NSRect(
+            x: hosting.bounds.width / 2 - 40,
+            y: hosting.bounds.height - 16,
+            width: 80,
+            height: 12
+        ))
+        handle.toolTip = L10n.tr("Drag here to move the toolbar")
+        handle.onMouseEnter = { [weak self] in self?.handleHoverEnter() }
+        handle.onMouseExit = { [weak self] in self?.handleHoverExit() }
+        // Centered strip pinned to the top edge when the panel changes
+        // size.
+        handle.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin]
+        hosting.addSubview(handle)
+
+        return hosting
+    }
+
+    private func hosting(for handleFrame: NSRect) -> NSHostingView<AnnotationToolbarView> {
+        NSHostingView(
+            rootView: AnnotationToolbarView(
+                coordinator: coordinator,
+                isAutoHideEnabled: isAutoHide,
+                onToggleAutoHide: { [weak self] in self?.toggleAutoHide() },
+                onShowShortcuts: { [weak self] in self?.toggleShortcutsWindow() }
+            )
+        )
+    }
+
+    private func handleHoverEnter() {
+        autoCollapseTask?.cancel()
+        autoCollapseTask = nil
+        guard isAutoHide, !isExpanded else { return }
+        showExpanded()
+    }
+
+    private func handleHoverExit() {
+        guard isAutoHide, isExpanded else { return }
+        autoCollapseTask?.cancel()
+        autoCollapseTask = Task { [weak self] in
+            // A grace period so a quick pass does not snap the bar away.
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.collapseToTab()
+        }
+    }
+
+    /// Pin toggle: the expanded HUD is rebuilt so the button reflects
+    /// the new state.
+    func toggleAutoHide() {
+        isAutoHide.toggle()
+        guard let panel, isExpanded,
+              let hosting = panel.contentView as? NSHostingView<AnnotationToolbarView> else { return }
+        hosting.rootView = AnnotationToolbarView(
+            coordinator: coordinator,
+            isAutoHideEnabled: isAutoHide,
+            onToggleAutoHide: { [weak self] in self?.toggleAutoHide() },
+            onShowShortcuts: { [weak self] in self?.toggleShortcutsWindow() }
+        )
+    }
+
+    private func collapseToTab() {
+        guard let panel, isExpanded else { return }
+        isExpanded = false
+
+        let frame = panel.frame
+        let screenFrame = NSScreen.screens.first { $0.frame.intersects(frame) }?.frame
+            ?? NSScreen.main?.frame ?? frame
+        let tabSize = NSSize(width: 48, height: 12)
+        var origin = frame.origin
+        // Keep the tab anchored on whichever side of the screen the bar
+        // was closest to.
+        if frame.midX >= screenFrame.midX {
+            origin.x = frame.maxX - tabSize.width
+        }
+        if frame.midY >= screenFrame.midY {
+            origin.y = frame.maxY - tabSize.height
+        } else {
+            origin.y = frame.minY
+        }
+        let tab = NSRect(origin: origin, size: tabSize)
+
+        let tabView = DragHandleView(frame: NSRect(origin: .zero, size: tabSize))
+        tabView.toolTip = L10n.tr("Show the controls")
+        tabView.onMouseEnter = { [weak self] in self?.handleHoverEnter() }
+        let tabContents = tabView
+        panel.contentView = tabContents
+        panel.setFrame(tab, display: true, animate: true)
+    }
+
+    private func showExpanded() {
+        guard let panel, !isExpanded else { return }
+        isExpanded = true
+
+        // Grow back around the tab's anchor corner, kept on screen.
+        let current = panel.frame
+        let union = NSScreen.screens.dropFirst().reduce(
+            NSScreen.screens.first?.frame ?? current
+        ) { $0.union($1.frame) }
+        var origin = current.origin
+        origin.x = min(max(origin.x, union.minX - Self.barSize.width + 120), union.maxX - 120)
+        origin.y = min(max(origin.y, union.minY - Self.barSize.height + 80), union.maxY - 80)
+        let target = NSRect(origin: origin, size: Self.barSize)
+
+        panel.contentView = makeExpandedContent(
+            handleFrame: NSRect(
+                x: target.width / 2 - 40,
+                y: target.height - 16,
+                width: 80,
+                height: 12
+            )
+        )
+        panel.setFrame(target, display: true, animate: false)
+    }
+
+    // MARK: Shortcut cheat-sheet
+
+    func toggleShortcutsWindow() {
+        if shortcutsWindow?.isVisible == true {
+            closeShortcutsWindow()
+            return
+        }
+        guard let panel else { return }
+
+        let size = NSSize(width: 300, height: 356)
+        let frame = panel.frame
+        let screenFrame = NSScreen.screens.first { $0.frame.intersects(frame) }?.visibleFrame
+            ?? NSScreen.main?.visibleFrame ?? frame
+
+        let gap: CGFloat = 8
+        var x = frame.maxX + gap
+        if x + size.width > screenFrame.maxX {
+            x = max(frame.minX - size.width - gap, screenFrame.minX)
+        }
+        // Top-align with the bar, then keep it on screen.
+        let y = min(max(frame.maxY - size.height, screenFrame.minY), screenFrame.maxY - size.height)
+
+        let window = HelpPanel(contentRect: NSRect(origin: NSPoint(x: x, y: y), size: size))
+        window.contentView = NSHostingView(rootView: ShortcutHelpView())
+        window.orderFrontRegardless()
+        shortcutsWindow = window
+    }
+
+    private func closeShortcutsWindow() {
+        shortcutsWindow?.orderOut(nil)
+        shortcutsWindow?.close()
+        shortcutsWindow = nil
     }
 }
 
@@ -82,6 +252,9 @@ struct AnnotationToolbarView: View {
     ]
 
     @ObservedObject var coordinator: AppCoordinator
+    var isAutoHideEnabled: Bool = false
+    var onToggleAutoHide: () -> Void = {}
+    var onShowShortcuts: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 8) {
@@ -172,8 +345,21 @@ struct AnnotationToolbarView: View {
             ) {
                 coordinator.togglePause()
             }
+            AnnotationControlButton(
+                systemImage: "questionmark.circle",
+                help: L10n.tr("Keyboard shortcuts")
+            ) {
+                onShowShortcuts()
+            }
             AnnotationControlButton(systemImage: "gearshape") {
                 coordinator.onShowAppSettings?()
+            }
+            EffectButton(
+                systemImage: "pin.fill",
+                isSelected: isAutoHideEnabled,
+                help: L10n.tr("Auto-hide")
+            ) {
+                onToggleAutoHide()
             }
 
             finishButton
@@ -297,6 +483,7 @@ private struct EffectButton: View {
 private struct AnnotationControlButton: View {
     var systemImage: String
     var isEnabled = true
+    var help = ""
     var action: () -> Void
 
     var body: some View {
@@ -313,6 +500,7 @@ private struct AnnotationControlButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
+        .help(help)
     }
 }
 
@@ -324,6 +512,11 @@ private struct AnnotationControlButton: View {
 /// starts the standard, system window drag itself and then keeps the
 /// bar within a visible screen.
 private final class DragHandleView: NSView {
+    /// Hooked up by the controller: fires when the cursor enters/leaves
+    /// the handle (it drives the auto-hide expand/collapse too).
+    var onMouseEnter: (() -> Void)?
+    var onMouseExit: (() -> Void)?
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override var mouseDownCanMoveWindow: Bool { false }
@@ -347,10 +540,12 @@ private final class DragHandleView: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         NSCursor.openHand.set()
+        onMouseEnter?()
     }
 
     override func mouseExited(with event: NSEvent) {
         NSCursor.arrow.set()
+        onMouseExit?()
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -361,6 +556,7 @@ private final class DragHandleView: NSView {
         window.performDrag(with: event)
         NSCursor.arrow.set()
         clampIntoVisibleArea()
+        snapToNearestCorner()
     }
 
     /// Keeps the bar from being dragged completely off the desktop.
@@ -380,6 +576,40 @@ private final class DragHandleView: NSView {
         window.setFrameOrigin(origin)
     }
 
+    /// Magnetically glues the bar to a screen corner when the drop
+    /// happens near one. `visibleFrame` keeps it clear of the menu bar
+    /// and the Dock. When the bar is collapsed into its tab it snaps as
+    /// a tab.
+    private func snapToNearestCorner() {
+        guard let window else { return }
+        let frame = window.frame
+        let screen = NSScreen.screens.first {
+            $0.frame.contains(NSPoint(x: frame.midX, y: frame.midY))
+        } ?? NSScreen.main
+        guard let visible = screen?.visibleFrame else { return }
+
+        let margin: CGFloat = 6
+        let width = frame.width
+        let height = frame.height
+        let candidates: [(x: CGFloat, y: CGFloat)] = [
+            (visible.minX + margin, visible.maxY - height - margin),
+            (visible.maxX - width - margin, visible.maxY - height - margin),
+            (visible.minX + margin, visible.minY + margin),
+            (visible.maxX - width - margin, visible.minY + margin),
+        ]
+
+        let current = frame.origin
+        let best = candidates
+            .map { candidate -> (NSPoint, CGFloat) in
+                let target = NSPoint(x: candidate.x, y: candidate.y)
+                return (target, abs(candidate.x - current.x) + abs(candidate.y - current.y))
+            }
+            .filter { $0.1 < 90 }
+            .min { $0.1 < $1.1 }
+        guard let snapped = best else { return }
+        window.setFrameOrigin(snapped.0)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         // A macOS-style dot grip: two rows of three dots.
         let dot = NSBezierPath()
@@ -394,5 +624,134 @@ private final class DragHandleView: NSView {
         }
         NSColor.white.withAlphaComponent(0.30).setFill()
         dot.fill()
+    }
+}
+
+/// Invisible hover-tracking view over the whole bar: never responds to
+/// clicks (SwiftUI keeps control of them) but reports enter/exit so the
+/// auto-hide can collapse/expand the bar.
+private final class HoverPassThruView: NSView {
+    var onEnter: (() -> Void)?
+    var onExit: (() -> Void)?
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways],
+            owner: self
+        )
+        addTrackingArea(area)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onEnter?()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onExit?()
+    }
+}
+
+/// The floating cheat-sheet listing the keyboard shortcuts.
+private final class HelpPanel: NSPanel {
+    init(contentRect: NSRect) {
+        super.init(
+            contentRect: contentRect,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        // Above the toolbar itself.
+        level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 2)
+        isReleasedWhenClosed = false
+        // Floating panels auto-hide as soon as another app becomes
+        // active, so clicking outside the app dismisses the sheet.
+        hidesOnDeactivate = true
+        isOpaque = false
+        backgroundColor = .clear
+    }
+}
+
+/// The SwiftUI contents of the shortcut cheat-sheet.
+struct ShortcutHelpView: View {
+    private static let rows: [(String, [String])] = [
+        (L10n.tr("Enter / end the presentation"), ["⌘⇧A"]),
+        (L10n.tr("Pointer highlight"), ["⌘⇧F"]),
+        (L10n.tr("Spotlight"), ["⌘⇧D"]),
+        (L10n.tr("Zoom lens"), ["⌘⇧G"]),
+        (L10n.tr("Pause"), ["⌘⇧S"]),
+        (L10n.tr("Undo"), ["⌘⌥Z"]),
+        (L10n.tr("Redo"), ["⌘⌥⇧Z"]),
+        (L10n.tr("Copy Screenshot"), ["⌘⇧C"]),
+        (L10n.tr("Save Screenshot…"), ["⌘⌥⇧S"]),
+        (L10n.tr("Quit Presentify"), ["⌘⌥Q"]),
+    ]
+
+    private static let notes: [(String, String)] = [
+        (L10n.tr("ESC always ends the presentation"), "ESC"),
+        (L10n.tr("Draw with ⌥ held"), "⌥"),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(L10n.tr("Keyboard shortcuts"))
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+
+            ForEach(Self.rows, id: \.0) { name, keys in
+                HStack(spacing: 8) {
+                    Text(name)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.85))
+                    Spacer()
+                    HStack(spacing: 4) {
+                        ForEach(keys, id: \.self) { KeyCap(symbol: $0) }
+                    }
+                }
+            }
+
+            Divider()
+                .background(Color.white.opacity(0.2))
+
+            ForEach(Self.notes, id: \.1) { name, key in
+                HStack(spacing: 8) {
+                    Text(name)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.65))
+                    Spacer()
+                    KeyCap(symbol: key, accent: true)
+                }
+            }
+        }
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+        )
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+/// A little rounded key badge ("⌘⇧A") used in the cheat-sheet.
+private struct KeyCap: View {
+    var symbol: String
+    var accent = false
+
+    var body: some View {
+        Text(symbol)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(accent ? Color.yellow.opacity(0.9) : Color.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                Capsule().fill(
+                    accent ? Color.yellow.opacity(0.14) : Color.white.opacity(0.14)
+                )
+            )
     }
 }

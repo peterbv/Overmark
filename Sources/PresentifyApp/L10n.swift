@@ -65,6 +65,11 @@ public enum L10n {
         "⌥ draw": "⌥ dibujar",
         "capture mode": "modo de captura",
         "Drag here to move the toolbar": "Arrastrá acá para mover la barra",
+        "Auto-hide": "Auto-ocultar",
+        "Show the controls": "Mostrar los controles",
+        "Keyboard shortcuts": "Atajos de teclado",
+        "Enter / end the presentation": "Entrar / terminar la presentación",
+        "ESC always ends the presentation": "ESC siempre termina la presentación",
         "The overlay captures every click until Accessibility is granted (System Settings → Privacy & security → Accessibility). Press here to open it.":
             "El overlay captura todos los clics hasta que concedas Accesibilidad (Ajustes del Sistema → Privacidad y seguridad → Accesibilidad). Toca aquí para abrirla.",
         "While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath.":
