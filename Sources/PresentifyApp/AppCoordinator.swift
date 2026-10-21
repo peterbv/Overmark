@@ -154,6 +154,16 @@ public final class AppCoordinator: ObservableObject {
 
     // MARK: - Permissions
 
+    /// Whether the overlay pass-through is fully active right now.
+    public var overlayPassthroughActive: Bool {
+        overlay.isPassthroughMode
+    }
+
+    /// Compactly logs the overlay click-routing state (diagnostics only).
+    public func debugOverlayState() -> String {
+        overlay.debugPanelState()
+    }
+
     /// Requests a permission and refreshes the state.
     @discardableResult
     public func requestPermission(_ kind: PermissionKind) async -> Bool {
@@ -370,6 +380,11 @@ public final class AppCoordinator: ObservableObject {
             defer: false
         )
         window.title = L10n.tr("Add Text")
+        // The coordinator holds no strong reference to this window, so it must
+        // not self-release on close(): close() defers an autorelease and
+        // popping that pool after the last strong reference goes away would
+        // over-release freed memory.
+        window.isReleasedWhenClosed = false
         // The overlay panels float at `.statusBar` level and cover every
         // screen, so a normal window would open behind them — invisible and
         // unable to receive the keystrokes. The editor is placed just above

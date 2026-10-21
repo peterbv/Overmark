@@ -39,6 +39,9 @@ final class AnnotationToolbarController {
         // Above the overlay panels so the spotlight's dimming layer never
         // draws over the controls.
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+        // Drag anywhere on the toolbar background to reposition it; button
+        // hits still take precedence over the window-move gesture.
+        panel.isMovableByWindowBackground = true
         panel.contentView = NSHostingView(rootView: AnnotationToolbarView(coordinator: coordinator))
         panel.orderFrontRegardless()
 
@@ -152,15 +155,32 @@ struct AnnotationToolbarView: View {
                 .frame(width: 110)
 
             if coordinator.settings.holdOptionToDraw {
-                Text(L10n.tr("⌥ draw"))
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.65))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.white.opacity(0.10)))
-                    .help(
-                        L10n.tr("While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath.")
-                    )
+                if coordinator.overlayPassthroughActive {
+                    Text(L10n.tr("⌥ draw"))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.65))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(0.10)))
+                        .help(
+                            L10n.tr("While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath.")
+                        )
+                } else {
+                    Text(L10n.tr("capture mode"))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.yellow.opacity(0.9))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.yellow.opacity(0.12)))
+                        .help(
+                            L10n.tr("The overlay captures every click until Accessibility is granted (System Settings → Privacy & security → Accessibility). Press here to open it.")
+                        )
+                        .onTapGesture {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                }
             }
         }
         .padding(.horizontal, 4)

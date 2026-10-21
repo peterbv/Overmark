@@ -42,19 +42,33 @@ public final class CursorEffectView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
         // Convert the screen-space pointer into the view's own coordinates.
-        let local = Point(x: Double(bounds.origin.x), y: Double(bounds.origin.y))
+        // The view fills the window, so the window's frame origin is this
+        // display's origin in screen space (bounds.origin is always (0, 0)
+        // for a borderless window's content view and must NOT be used).
+        let windowOrigin = window?.frame.origin
+        let originX = windowOrigin.map { Double($0.x) } ?? screen.origin.x
+        let originY = windowOrigin.map { Double($0.y) } ?? screen.origin.y
         let cursor = Point(
-            x: cursorLocation.x - local.x,
-            y: cursorLocation.y - local.y
+            x: cursorLocation.x - originX,
+            y: cursorLocation.y - originY
         )
 
+        // The pointer lives on exactly one display. Respectively effects that
+        // follow the pointer — the lens, the highlight ring and the spotlight
+        // hole — only make sense on that display; every other display keeps
+        // its dimming layer without punching a hole for a pointer it hosts on
+        // a neighbor.
+        let isCursorHere =
+            cursor.x >= bounds.minX - 1 && cursor.x <= bounds.maxX + 1 &&
+            cursor.y >= bounds.minY - 1 && cursor.y <= bounds.maxY + 1
+
         if effects.isSpotlightEnabled {
-            drawSpotlight(cursor: cursor, in: context)
+            drawSpotlight(cursor: cursor, punchesHole: isCursorHere, in: context)
         }
-        if effects.isZoomEnabled {
+        if effects.isZoomEnabled && isCursorHere {
             drawZoomLens(cursor: cursor, in: context)
         }
-        if effects.isHighlightEnabled {
+        if effects.isHighlightEnabled && isCursorHere {
             drawHighlight(cursor: cursor, in: context)
         }
     }
@@ -62,7 +76,11 @@ public final class CursorEffectView: NSView {
     // MARK: - Effects
 
     /// Dims the screen except for a circle around the pointer.
-    private func drawSpotlight(cursor: Point, in context: CGContext) {
+    ///
+    /// On the display the pointer is on, the dimming layer punches a clean
+    /// hole around the pointer. Displays without the pointer stay uniformly
+    /// dimmed.
+    private func drawSpotlight(cursor: Point, punchesHole: Bool, in context: CGContext) {
         context.saveGState()
         defer { context.restoreGState() }
 
@@ -71,6 +89,8 @@ public final class CursorEffectView: NSView {
             alpha: effects.spotlightDimOpacity
         ))
         context.fill(bounds)
+
+        guard punchesHole else { return }
 
         // Punch the spotlight out of the dimming layer, so the app below shows
         // through the hole.

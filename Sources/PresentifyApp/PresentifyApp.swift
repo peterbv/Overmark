@@ -83,6 +83,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await coordinator.enterAnnotationMode()
             step("enterAnnotationMode")
             try? await Task.sleep(nanoseconds: 800_000_000)
+            FileHandle.standardError.write(Data("\(coordinator.debugOverlayState())\n".utf8))
+
+            coordinator.cursorEffects.isHighlightEnabled = true
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            step("highlight on")
+            coordinator.cursorEffects.isHighlightEnabled = false
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            step("highlight off (rebuild → tearDown → close)")
 
             coordinator.cursorEffects.isSpotlightEnabled = true
             try? await Task.sleep(nanoseconds: 800_000_000)
@@ -222,6 +230,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = L10n.tr("Presentify Setup")
+        // Not strongly retained by the delegate, so it must not self-release
+        // on close (same over-release risk as the text editor window).
+        window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(
             rootView: OnboardingView(coordinator: coordinator)
         )

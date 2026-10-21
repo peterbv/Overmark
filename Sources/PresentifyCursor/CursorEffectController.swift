@@ -106,6 +106,12 @@ public final class CursorEffectController {
                 backing: .buffered,
                 defer: true
             )
+            // tearDown() also drops the controller's strong reference, so the
+            // window must not also self-release on close: close() defers an
+            // autorelease, and popping that pool after the last strong
+            // reference goes away over-releases freed memory (SIGSEGV inside
+            // the enclosing Swift concurrency job's autorelease pool).
+            window.isReleasedWhenClosed = false
             window.isOpaque = false
             window.backgroundColor = .clear
             window.hasShadow = false

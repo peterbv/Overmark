@@ -230,6 +230,23 @@ public final class OverlayController {
 
     // MARK: - Pass-through
 
+    /// Whether the hold-⌥-to-draw pass-through is fully active.
+    ///
+    /// The toolbar reflects this in its chip; the degraded case means the ⌥
+    /// key could not be observed, so the panels capture clicks everywhere.
+    public var isPassthroughMode: Bool {
+        isOptionToDrawMode && canMonitorOption
+    }
+
+    /// Compactly logs the server-side click routing state of every panel.
+    public func debugPanelState() -> String {
+        let mode = "optionToDraw=\(isOptionToDrawMode) canMonitor=\(canMonitorOption) held=\(isOptionHeld)"
+        let panels = entries.values.map {
+            "\($0.panel.ignoresMouseEvents ? "ignore" : "accept") drawOpt=\($0.canvas.holdOptionToDraw)"
+        }.joined(separator: ", ")
+        return "[OVERLAY] \(mode) panels: [\(panels)]"
+    }
+
     /// Starts watching the ⌥ modifier for the hold-⌥-to-draw mode.
     ///
     /// `hitTest`-level filtering cannot forward a click to another app: by
