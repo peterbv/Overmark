@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import PresentifyCapture
 import PresentifyCore
 
 /// Manages the annotation overlays, one per display.
@@ -18,12 +17,11 @@ public final class OverlayController {
     }
 
     private var entries: [CGDirectDisplayID: PanelEntry] = [:]
-    private let captureService: ScreenCaptureService
 
     /// Whether a build of the overlays is currently running.
     private var isBuilding = false
-    /// Background settings that arrived while a build was running.
-    private var pendingBackgrounds: [CGDirectDisplayID: CGImage]?
+    /// Whether another overlay build was requested while one was running.
+    private var pendingBuild = false
 
     /// Watches the ⌥ key while the overlays are on screen so the panels can
     /// toggle window-level pass-through (see `refreshMouseTransparency`).
@@ -42,8 +40,13 @@ public final class OverlayController {
     /// The handler invoked when the canvas is clicked.
     private var onClick: ((Point) -> Void)?
 
-    public init(captureService: ScreenCaptureService) {
-        self.captureService = captureService
+    public init() {}
+
+    /// Probe-only stderr logging. Avoids cluttering normal runs: the env
+    /// var is only set by the diagnostic probe launcher.
+    private static func probeLog(_ message: String) {
+        guard ProcessInfo.processInfo.environment["PRESENTIFY_PROBE"] == "1" else { return }
+        FileHandle.standardError.write(Data("[BUILD] \(message)\n".utf8))
     }
 
     /// The number of displays currently overlaid.
@@ -51,41 +54,53 @@ public final class OverlayController {
 
     /// Shows overlays on every attached display.
     ///
-    /// - Parameter backgrounds: The screenshots to draw behind the
-    ///   annotations, keyed by display id. Each panel shows the screenshot of
-    ///   its own display; a display without a screenshot simply gets a
-    ///   transparent overlay.
-    public func showOverlays(backgrounds: [CGDirectDisplayID: CGImage] = [:]) async {
+    /// The panels are intentionally empty: a transparent borderless window
+    /// whose canvas draws the strokes directly over the live desktop.
+    /// Displaying a captured screenshot here layered a *still image* over
+    /// the real screen (and over the annotations themselves), which made
+    /// an otherwise healthy session look frozen.
+    public func showOverlays() async {
         // Two overlapping builds would interleave their `await`s and leave
         // orphaned panels on screen. Serialize: the latest request wins and
         // is chained after the running build instead of racing it.
         guard !isBuilding else {
-            pendingBackgrounds = backgrounds
+            pendingBuild = true
             return
         }
         isBuilding = true
 
-        var current = backgrounds
         repeat {
-            pendingBackgrounds = nil
-            await buildOverlays(backgrounds: current)
-            if let pending = pendingBackgrounds {
-                current = pending
-                continue
+            pendingBuild = false
+            await buildOverlays()
+            if !pendingBuild {
+                break
             }
-            break
         } while true
 
         isBuilding = false
     }
 
-    private func buildOverlays(backgrounds: [CGDirectDisplayID: CGImage]) async {
+    private func buildOverlays() async {
         tearDown()
 
-        guard let displays = try? await captureService.availableDisplays() else { return }
+        // Enumerate displays from AppKit: the panels must not depend on the
+        // Screen Recording permission. Only pixel capture (copy/save, the
+        // zoom lens background) does, and it lives elsewhere.
+        let screens = NSScreen.screens.compactMap { screen -> ScreenIdentity? in
+            guard let displayID = ScreenIdentity.displayID(of: screen) else {
+                Self.probeLog("no displayID in deviceDescription for '\(screen.localizedName)'")
+                return nil
+            }
+            return ScreenIdentity(displayID: displayID, screen: screen)
+        }
+        guard !screens.isEmpty else {
+            Self.probeLog("no screens matched; NSScreen.screens.count=\(NSScreen.screens.count)")
+            return
+        }
+        Self.probeLog("building \(screens.count) panels")
 
-        for display in displays {
-            let frame = display.screen.frame
+        for screen in screens {
+            let frame = screen.appKitFrame
             let rect = NSRect(
                 x: frame.origin.x,
                 y: frame.origin.y,
@@ -97,8 +112,8 @@ public final class OverlayController {
             panel.setFrame(rect, display: true)
 
             let canvas = AnnotationCanvasView(frame: rect)
-            canvas.screen = display.screen
-            canvas.menuBarHeight = Self.menuBarHeight(for: display.screen)
+            canvas.screen = screen.screenFrame
+            canvas.menuBarHeight = Self.menuBarHeight(for: screen.screenFrame)
             canvas.tool = .pen
             canvas.autoresizingMask = [.width, .height]
             canvas.wantsLayer = true
@@ -108,14 +123,10 @@ public final class OverlayController {
             canvas.onAnnotationCreated = onAnnotationCreated
             canvas.onClick = onClick
 
-            if let background = backgrounds[display.displayID] {
-                attach(background: background, to: canvas, screen: display.screen)
-            }
-
             panel.contentView = canvas
             panel.presentAboveAll()
 
-            entries[display.displayID] = PanelEntry(panel: panel, canvas: canvas)
+            entries[screen.displayID] = PanelEntry(panel: panel, canvas: canvas)
         }
 
         startOptionMonitoring()
@@ -189,28 +200,30 @@ public final class OverlayController {
 
     // MARK: - Private
 
-    /// Draws a captured screenshot behind the annotations.
-    private func attach(background: CGImage, to canvas: NSView, screen: ScreenFrame) {
-        let layer = CALayer()
-        layer.contents = background
-        layer.contentsGravity = .resizeAspect
-        layer.frame = canvas.bounds
-        layer.magnificationFilter = .nearest
+    /// One AppKit screen plus the identifiers the controller keys on.
+    ///
+    /// `NSScreen.screens` needs no permission, unlike ScreenCaptureKit's
+    /// display enumeration, so the annotation panels can be built (and torn
+    /// down) regardless of what Screen Recording allows.
+    private struct ScreenIdentity {
+        var displayID: CGDirectDisplayID
+        var appKitFrame: NSRect
+        var screenFrame: ScreenFrame
 
-        let imageWidth = CGFloat(background.width)
-        let imageHeight = CGFloat(background.height)
-        guard imageWidth > 0, imageHeight > 0 else { return }
+        static func displayID(of screen: NSScreen) -> CGDirectDisplayID? {
+            (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+        }
 
-        // `contentsScale` is the layer's backing pixels *per point*. The
-        // screenshot arrives in device pixels, so the scale is pixels ÷
-        // points — the inverse of point ÷ pixels. The inverted version
-        // downsampled every screenshot to a fraction of its resolution,
-        // which showed as blurry overlays under Retina-quality strokes.
-        let scaleX = imageWidth / max(canvas.bounds.width, 1)
-        let scaleY = imageHeight / max(canvas.bounds.height, 1)
-        layer.contentsScale = max(scaleX, scaleY)
-
-        canvas.layer?.addSublayer(layer)
+        init(displayID: CGDirectDisplayID, screen: NSScreen) {
+            self.displayID = displayID
+            self.appKitFrame = screen.frame
+            let frame = screen.frame
+            self.screenFrame = ScreenFrame(
+                origin: Point(x: frame.origin.x, y: frame.origin.y),
+                size: Size(width: frame.size.width, height: frame.size.height),
+                scale: Double(screen.backingScaleFactor)
+            )
+        }
     }
 
     /// The height of the menu bar for the screen a canvas covers.
@@ -240,7 +253,7 @@ public final class OverlayController {
 
     /// Compactly logs the server-side click routing state of every panel.
     public func debugPanelState() -> String {
-        let mode = "optionToDraw=\(isOptionToDrawMode) canMonitor=\(canMonitorOption) held=\(isOptionHeld)"
+        let mode = "optionToDraw=\(isOptionToDrawMode) canMonitor=\(canMonitorOption) held=\(isOptionHeld) count=\(entries.count)"
         let panels = entries.values.map {
             "\($0.panel.ignoresMouseEvents ? "ignore" : "accept") drawOpt=\($0.canvas.holdOptionToDraw)"
         }.joined(separator: ", ")

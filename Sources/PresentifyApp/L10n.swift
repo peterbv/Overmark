@@ -155,6 +155,7 @@ public enum L10n {
         "Presentify needs Screen Recording access to capture the screen.":
             "Presentify necesita acceso a Grabación de pantalla para capturar la pantalla.",
         "No displays were available to annotate.": "No había pantallas disponibles para anotar.",
+        "Reopen Presentify or check System Settings → Displays if this persists.": "Vuelve a abrir Presentify o revisa Ajustes del Sistema → Pantallas si continúa.",
         "Could not capture the screen:": "No se pudo capturar la pantalla:",
         "Could not capture the screen.": "No se pudo capturar la pantalla.",
     ]

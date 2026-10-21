@@ -84,15 +84,30 @@ public final class CursorEffectController {
         tearDown()
 
         guard effects != CursorEffects() else { return }
-        guard let displays = try? await captureService.availableDisplays() else { return }
+
+        // Enumerate displays from AppKit: building the windows must not
+        // depend on the Screen Recording permission at all. Only the zoom
+        // lens's background capture does, and it degrades per-display.
+        let screens = NSScreen.screens.compactMap { screen -> ScreenIdentity? in
+            guard let displayID = ScreenIdentity.displayID(of: screen) else { return nil }
+            return ScreenIdentity(displayID: displayID, screen: screen)
+        }
+        guard !screens.isEmpty else { return }
 
         // The zoom lens needs a picture of the screen to magnify. The
         // capture runs while no effect window is visible, so the lens does
         // not end up magnifying its own dimming layer.
-        let background = await captureBackground(displays: displays)
+        var backgrounds: [CGDirectDisplayID: CGImage] = [:]
+        if effects.isZoomEnabled {
+            for screen in screens {
+                if let snapshot = try? await captureService.capture(displayID: screen.displayID) {
+                    backgrounds[screen.displayID] = snapshot.image
+                }
+            }
+        }
 
-        for display in displays {
-            let frame = display.screen.frame
+        for screen in screens {
+            let frame = screen.appKitFrame
             let rect = NSRect(
                 x: frame.origin.x,
                 y: frame.origin.y,
@@ -121,14 +136,14 @@ public final class CursorEffectController {
             window.isExcludedFromWindowsMenu = true
 
             let view = CursorEffectView(frame: rect)
-            view.screen = display.screen
+            view.screen = screen.screenFrame
             view.effects = effects
-            view.backgroundImage = background[display.displayID]
+            view.backgroundImage = backgrounds[screen.displayID]
 
             window.contentView = view
             window.orderFrontRegardless()
 
-            entries[display.displayID] = WindowEntry(window: window, view: view)
+            entries[screen.displayID] = WindowEntry(window: window, view: view)
         }
     }
 
@@ -158,19 +173,29 @@ public final class CursorEffectController {
 
     // MARK: - Private
 
-    /// Captures each display so the zoom lens has something to magnify.
-    private func captureBackground(
-        displays: [ScreenCaptureService.DisplayInfo]
-    ) async -> [CGDirectDisplayID: CGImage] {
-        guard effects.isZoomEnabled else { return [:] }
+    /// One AppKit screen plus the identifiers the controller keys on.
+    ///
+    /// `NSScreen.screens` needs no permission, unlike ScreenCaptureKit's
+    /// display enumeration, so the effect windows can be built (and torn
+    /// down) regardless of what Screen Recording allows.
+    private struct ScreenIdentity {
+        var displayID: CGDirectDisplayID
+        var appKitFrame: NSRect
+        var screenFrame: ScreenFrame
 
-        var images: [CGDirectDisplayID: CGImage] = [:]
-        for display in displays {
-            guard let snapshot = try? await captureService.capture(displayID: display.displayID) else {
-                continue
-            }
-            images[display.displayID] = snapshot.image
+        static func displayID(of screen: NSScreen) -> CGDirectDisplayID? {
+            (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
         }
-        return images
+
+        init(displayID: CGDirectDisplayID, screen: NSScreen) {
+            self.displayID = displayID
+            self.appKitFrame = screen.frame
+            let frame = screen.frame
+            self.screenFrame = ScreenFrame(
+                origin: Point(x: frame.origin.x, y: frame.origin.y),
+                size: Size(width: frame.size.width, height: frame.size.height),
+                scale: Double(screen.backingScaleFactor)
+            )
+        }
     }
 }

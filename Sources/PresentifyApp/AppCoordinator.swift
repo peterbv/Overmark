@@ -84,7 +84,7 @@ public final class AppCoordinator: ObservableObject {
     public init() {
         let captureService = ScreenCaptureService()
         let cursorTracker = CursorTracker()
-        let overlay = OverlayController(captureService: captureService)
+        let overlay = OverlayController()
 
         self.captureService = captureService
         self.cursorTracker = cursorTracker
@@ -208,6 +208,14 @@ public final class AppCoordinator: ObservableObject {
 
     /// Enters annotation mode, capturing the screen and showing the overlays.
     public func enterAnnotationMode() async {
+        // The diagnostic probe exercises the panel/passthrough machinery even
+        // when the probe process (a bare exec'd binary) has no TCC grant: it
+        // cannot answer System Settings prompts on its own.
+        if ProcessInfo.processInfo.environment["PRESENTIFY_PROBE"] == "1" {
+            await presentOverlays()
+            return
+        }
+
         guard !permissions.screenRecording.isGranted else {
             await presentOverlays()
             return
@@ -253,39 +261,45 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
-    /// Shows the overlays, capturing the screen first.
+    /// Shows the overlays: a transparent canvas over the live desktop on
+    /// every display.
+    ///
+    /// No screenshot is displayed behind the strokes. An earlier design
+    /// layered a fresh capture under the annotations, but rendering it as a
+    /// sublayer of the canvas meant the picture sat *above* both the live
+    /// desktop and the strokes: the whole screen looked frozen inside a
+    /// static photo, clicks landed on apps that stayed invisibly busy, and
+    /// every annotation drawn was hidden underneath it.
     private func presentOverlays() async {
-        do {
-            let snapshots = try await captureService.captureAllDisplays()
-            guard !snapshots.isEmpty else {
-                lastError = L10n.tr("No displays were available to annotate.")
-                return
-            }
+        await overlay.showOverlays()
 
-            // The overlay renders on every display, and each panel shows the
-            // screenshot of its own display so a multi-monitor setup does not
-            // repeat the first screen on every panel.
-            let backgrounds = Dictionary(
-                uniqueKeysWithValues: snapshots.map { ($0.displayID, $0.image) }
+        guard overlay.overlayCount > 0 else {
+            // Panels can fail to build only when no screens are matched at
+            // all. Surface it: the toolbar was never built, so without an
+            // alert the user just sees "nothing happens".
+            lastError = L10n.tr("No displays were available to annotate.")
+            let alert = NSAlert()
+            alert.messageText = L10n.tr("No displays were available to annotate.")
+            alert.informativeText = L10n.tr(
+                "Reopen Presentify or check System Settings → Displays if this persists."
             )
-            await overlay.showOverlays(backgrounds: backgrounds)
-
-            overlay.setAnnotations(document.annotations)
-            overlay.apply(settings: settings)
-            mode = .annotating
-
-            // The control bar is what makes annotation mode self-serve: no
-            // hot keys required to switch tools, undo a stroke or stop.
-            if let screen = NSScreen.main ?? NSScreen.screens.first {
-                toolbar?.show(on: screen)
-            }
-
-            // And Escape is the guaranteed exit hatch, even if the control
-            // bar ever fails to appear.
-            registerEscapeHotKey()
-        } catch {
-            lastError = "\(L10n.tr("Could not capture the screen:")) \(error.localizedDescription)"
+            alert.runModal()
+            return
         }
+
+        overlay.setAnnotations(document.annotations)
+        overlay.apply(settings: settings)
+        mode = .annotating
+
+        // The control bar is what makes annotation mode self-serve: no
+        // hot keys required to switch tools, undo a stroke or stop.
+        if let screen = NSScreen.main ?? NSScreen.screens.first {
+            toolbar?.show(on: screen)
+        }
+
+        // And Escape is the guaranteed exit hatch, even if the control
+        // bar ever fails to appear.
+        registerEscapeHotKey()
     }
 
     /// Registers the Escape key so it ends the presentation while the

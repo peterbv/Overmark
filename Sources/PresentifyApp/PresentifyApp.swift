@@ -80,6 +80,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             do { try await Task.sleep(nanoseconds: 2_000_000_000) } catch {}
 
+            let screenReport = """
+            [SCREEN] count=\(NSScreen.screens.count) frames=[\(NSScreen.screens.map { NSStringFromRect($0.frame) }.joined(separator: ", "))] \
+            mode=\(coordinator.mode) holdOpt=\(coordinator.settings.holdOptionToDraw)
+            """
+            FileHandle.standardError.write(Data((screenReport + "\n").utf8))
+
             await coordinator.enterAnnotationMode()
             step("enterAnnotationMode")
             try? await Task.sleep(nanoseconds: 800_000_000)
