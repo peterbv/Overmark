@@ -64,6 +64,7 @@ public enum L10n {
         "Finish annotating": "Terminar la anotación",
         "⌥ draw": "⌥ dibujar",
         "capture mode": "modo de captura",
+        "Drag here to move the toolbar": "Arrastrá acá para mover la barra",
         "The overlay captures every click until Accessibility is granted (System Settings → Privacy & security → Accessibility). Press here to open it.":
             "El overlay captura todos los clics hasta que concedas Accesibilidad (Ajustes del Sistema → Privacidad y seguridad → Accesibilidad). Toca aquí para abrirla.",
         "While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath.":

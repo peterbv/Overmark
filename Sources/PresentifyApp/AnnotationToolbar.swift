@@ -43,6 +43,14 @@ final class AnnotationToolbarController {
         // hits still take precedence over the window-move gesture.
         panel.isMovableByWindowBackground = true
         panel.contentView = NSHostingView(rootView: AnnotationToolbarView(coordinator: coordinator))
+        // `isMovableByWindowBackground` cannot move a window whose content
+        // view is an NSHostingView — SwiftUI consumes the clicks — so a
+        // dedicated grip strip drives the standard window-drag machinery.
+        let handle = DragHandleView(
+            frame: NSRect(x: size.width / 2 - 40, y: size.height - 16, width: 80, height: 12)
+        )
+        handle.toolTip = L10n.tr("Drag here to move the toolbar")
+        panel.contentView?.addSubview(handle)
         panel.orderFrontRegardless()
 
         self.panel = panel
@@ -80,7 +88,10 @@ struct AnnotationToolbarView: View {
             mainRow
             styleRow
         }
-        .padding(10)
+        .padding(.top, 18)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -302,5 +313,86 @@ private struct AnnotationControlButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
+    }
+}
+
+/// The grip strip at the top-centre of the bar that moves the whole bar.
+///
+/// AppKit's `isMovableByWindowBackground` is of no use here: the content
+/// view is an `NSHostingView`, and SwiftUI consumes the mouse events
+/// before the window's move-on-background logic runs. So the handle
+/// starts the standard, system window drag itself and then keeps the
+/// bar within a visible screen.
+private final class DragHandleView: NSView {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        // .activeAlways so the hand cursor works even though the panel
+        // never becomes key.
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways],
+            owner: self
+        )
+        addTrackingArea(area)
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .openHand)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        NSCursor.openHand.set()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        NSCursor.arrow.set()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let window else { return }
+        NSCursor.closedHand.set()
+        // Runs its own nested event loop and returns as soon as the user
+        // releases the button; AppKit handles all the tracking.
+        window.performDrag(with: event)
+        NSCursor.arrow.set()
+        clampIntoVisibleArea()
+    }
+
+    /// Keeps the bar from being dragged completely off the desktop.
+    private func clampIntoVisibleArea() {
+        guard let window, let first = NSScreen.screens.first else { return }
+        var union = first.frame
+        for screen in NSScreen.screens.dropFirst() {
+            union = union.union(screen.frame)
+        }
+
+        let frame = window.frame
+        var origin = frame.origin
+        // Always leave at least 120pt of the bar horizontally on screen
+        // and 80pt vertically, on some display.
+        origin.x = min(max(origin.x, union.minX - frame.width + 120), union.maxX - 120)
+        origin.y = min(max(origin.y, union.minY - frame.height + 80), union.maxY - 80)
+        window.setFrameOrigin(origin)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        // A macOS-style dot grip: two rows of three dots.
+        let dot = NSBezierPath()
+        let radius: CGFloat = 1.5
+        let spacing: CGFloat = 5
+        for row in [CGFloat(-1), 1] {
+            for column in [CGFloat(-1), 0, 1] {
+                let x = bounds.midX + column * spacing - radius
+                let y = bounds.midY + row * 2.5 - radius
+                dot.appendOval(in: NSRect(x: x, y: y, width: radius * 2, height: radius * 2))
+            }
+        }
+        NSColor.white.withAlphaComponent(0.30).setFill()
+        dot.fill()
     }
 }
