@@ -129,6 +129,32 @@ public final class HotKeyManager {
         hotKeys[action] != nil
     }
 
+    // MARK: - Escape
+
+    /// The ad-hoc Escape hot key, registered only while the overlays are up.
+    ///
+    /// A bare Escape held permanently would swallow the key in every other
+    /// application, day to day. Registering it just for the duration of a
+    /// presentation gives the presenter a guaranteed way out — even if the
+    /// control bar fails to show or the overlays become unresponsive.
+    private var escapeHotKey: HotKey?
+
+    /// Registers Escape as a one-tap "end the presentation" key.
+    public func registerEscape(_ handler: @escaping () -> Void) {
+        // Replace any previous registration instead of doubling it.
+        escapeHotKey = nil
+        escapeHotKey = HotKey(
+            keyCombo: KeyCombo(key: .escape, modifiers: [])
+        ) {
+            MainActor.assumeIsolated { handler() }
+        }
+    }
+
+    /// Releases the Escape registration so the key returns to normal use.
+    public func unregisterEscape() {
+        escapeHotKey = nil
+    }
+
     /// The binding currently in effect for an action.
     public func binding(for action: HotKeyAction) -> Binding? {
         guard let hotKey = hotKeys[action] else { return nil }

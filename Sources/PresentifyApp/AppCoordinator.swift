@@ -55,11 +55,13 @@ public final class AppCoordinator: ObservableObject {
     private let cursorTracker: CursorTracker
     private let permissionService: PermissionService
     /// The floating control bar shown while annotating.
-    private var toolbar: AnnotationToolbarController?
 
     /// Opens the app's settings window; wired by the app delegate, which
     /// owns that window.
     public var onShowAppSettings: (() -> Void)?
+
+    /// The floating control bar shown while annotating.
+    private var toolbar: AnnotationToolbarController?
 
     /// Retains the delegate of the text editor window.
     ///
@@ -123,6 +125,7 @@ public final class AppCoordinator: ObservableObject {
     public func stop() {
         cursorTracker.stop()
         hotKeys.unregisterAll()
+        hotKeys.unregisterEscape()
         toolbar?.hide()
         overlay.tearDown()
         effectController.tearDown()
@@ -191,6 +194,7 @@ public final class AppCoordinator: ObservableObject {
     /// Leaves annotation mode and removes the overlays.
     public func exitAnnotationMode() {
         toolbar?.hide()
+        hotKeys.unregisterEscape()
         overlay.tearDown()
         mode = .idle
     }
@@ -245,8 +249,21 @@ public final class AppCoordinator: ObservableObject {
             if let screen = NSScreen.main ?? NSScreen.screens.first {
                 toolbar?.show(on: screen)
             }
+
+            // And Escape is the guaranteed exit hatch, even if the control
+            // bar ever fails to appear.
+            registerEscapeHotKey()
         } catch {
             lastError = "Could not capture the screen: \(error.localizedDescription)"
+        }
+    }
+
+    /// Registers the Escape key so it ends the presentation while the
+    /// overlays are on screen.
+    private func registerEscapeHotKey() {
+        hotKeys.registerEscape { [weak self] in
+            guard let self, self.mode != .idle else { return }
+            self.exitAnnotationMode()
         }
     }
 
