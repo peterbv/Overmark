@@ -23,12 +23,27 @@ public final class PermissionService: ObservableObject {
     }
 
     /// Re-reads the permission status from the system.
+    ///
+    /// A bare "not granted" is ambiguous: the prompt may never have been
+    /// shown, or the user may have answered "Don't Allow" in System
+    /// Settings, in which case asking again shows no new dialog. Once a
+    /// prompt has been shown (tracked in `UserDefaults`) the not-granted
+    /// state is reported as `.denied`, so the UI offers System Settings
+    /// instead of a Grant button that silently does nothing.
     public func refresh() {
+        let defaults = UserDefaults.standard
         state = PermissionState(
-            screenRecording: captureService.hasPermission() ? .granted : .notDetermined,
-            accessibility: CursorTracker.hasAccessibilityPermission() ? .granted : .notDetermined
+            screenRecording: captureService.hasPermission()
+                ? .granted
+                : (defaults.bool(forKey: Self.hasPromptedScreenRecording) ? .denied : .notDetermined),
+            accessibility: CursorTracker.hasAccessibilityPermission()
+                ? .granted
+                : (defaults.bool(forKey: Self.hasPromptedAccessibility) ? .denied : .notDetermined)
         )
     }
+
+    private static let hasPromptedScreenRecording = "Presentify.hasPromptedScreenRecording"
+    private static let hasPromptedAccessibility = "Presentify.hasPromptedAccessibility"
 
     /// Requests a permission, prompting the system dialog if needed.
     ///
@@ -38,8 +53,13 @@ public final class PermissionService: ObservableObject {
         var granted: Bool
         switch kind {
         case .screenRecording:
+            // Record that a prompt was shown *before* asking, so the follow-up
+            // refresh can tell "denied" from "never asked". macOS shows the
+            // TCC prompt only once; later calls return without a new dialog.
+            UserDefaults.standard.set(true, forKey: Self.hasPromptedScreenRecording)
             granted = await captureService.requestPermission()
         case .accessibility:
+            UserDefaults.standard.set(true, forKey: Self.hasPromptedAccessibility)
             granted = CursorTracker.requestAccessibilityPermission()
             // The Accessibility prompt is asynchronous in practice: the system
             // shows a dialog and the user answers it later. Re-reading the

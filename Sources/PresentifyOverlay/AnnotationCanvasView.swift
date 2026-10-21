@@ -61,6 +61,13 @@ public final class AnnotationCanvasView: NSView {
     /// to the app underneath, which is what "paused" mode means.
     public var isInteractionEnabled = true
 
+    /// Height of the menu bar on the screen this canvas covers.
+    ///
+    /// Clicks landing inside the top strip are never swallowed, so the menu
+    /// bar, the Dock-independent status items and the system UI stay usable
+    /// while the user is annotating. Zero means "exhaust the whole canvas".
+    public var menuBarHeight: Double = 0
+
     // MARK: - Tracking
 
     private var dragPoints: [Point] = []
@@ -163,6 +170,36 @@ public final class AnnotationCanvasView: NSView {
         isDragging = false
         dragPoints = []
         mouseDownPoint = nil
+    }
+
+    // MARK: - Hit testing
+
+    /// Decides which clicks the canvas is allowed to swallow.
+    ///
+    /// Two rules keep the screen usable while the overlay is up:
+    ///
+    /// - A paused overlay is fully click-through (`nil` matches nothing, so
+    ///   the click falls to the app underneath while the picture stays
+    ///   visible).
+    /// - Clicks inside the menu bar strip are never swallowed. Returning
+    ///   `nil` there hands them to the window sitting below the panel: the
+    ///   menu bar, the Dock and Presentify's own status item stay usable
+    ///   during a presentation instead of being blocked by the canvas.
+    public override func hitTest(_ point: NSPoint) -> NSView? {
+        guard isInteractionEnabled else { return nil }
+
+        if menuBarHeight > 0, let window {
+            // `point` arrives in the superview's space, which for a window's
+            // content view is the window base space; converting to screen
+            // space keeps the comparison independent of window placement.
+            let inScreen = window.convertToScreen(NSRect(origin: point, size: .zero))
+            let maxY = screen.origin.y + screen.size.height
+            if inScreen.origin.y > maxY - menuBarHeight {
+                return nil
+            }
+        }
+
+        return super.hitTest(point)
     }
 
     // MARK: - Annotation construction

@@ -79,7 +79,11 @@ public actor ScreenCaptureService {
         guard let display = try await findDisplay(id: displayID) else {
             return nil
         }
-        return try await capture(display)
+        let content = try await SCShareableContent.excludingDesktopWindows(
+            false,
+            onScreenWindowsOnly: false
+        )
+        return try await capture(display, excludingWindows: ownWindows(in: content))
     }
 
     /// Captures every attached display.
@@ -88,10 +92,11 @@ public actor ScreenCaptureService {
             false,
             onScreenWindowsOnly: false
         )
+        let excluded = ownWindows(in: content)
         var snapshots: [DisplaySnapshot] = []
 
         for display in content.displays {
-            guard let snapshot = try? await capture(display) else { continue }
+            guard let snapshot = try? await capture(display, excludingWindows: excluded) else { continue }
             snapshots.append(snapshot)
         }
         return snapshots
@@ -99,8 +104,18 @@ public actor ScreenCaptureService {
 
     // MARK: - Private
 
-    private func capture(_ display: SCDisplay) async throws -> DisplaySnapshot {
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+    /// Captures a single display.
+    ///
+    /// The screens are captured *without* this app's own windows: Presentify
+    /// composites its annotations on top of the raw capture itself, so the
+    /// overlay panels (which are visible on screen at that moment) must not
+    /// land in the image too — that would double-draw every stroke and bake
+    /// the floating toolbar into exported screenshots.
+    private func capture(
+        _ display: SCDisplay,
+        excludingWindows excluded: [SCWindow]
+    ) async throws -> DisplaySnapshot {
+        let filter = SCContentFilter(display: display, excludingWindows: excluded)
         let info = Self.describe(display)
 
         let configuration = SCStreamConfiguration()
@@ -120,6 +135,14 @@ public actor ScreenCaptureService {
         )
     }
 
+    /// The windows that belong to this app.
+    private func ownWindows(in content: SCShareableContent) -> [SCWindow] {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return [] }
+        return content.windows.filter {
+            $0.owningApplication?.bundleIdentifier == bundleID
+        }
+    }
+
     private func findDisplay(id: CGDirectDisplayID) async throws -> SCDisplay? {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false,
@@ -130,20 +153,21 @@ public actor ScreenCaptureService {
 
     /// Derives the geometry of a ScreenCaptureKit display.
     ///
-    /// `SCDisplay` only exposes a `frame` in points. The backing scale factor
-    /// comes from the matching `NSScreen`, which is what turns points into
-    /// device pixels for the capture configuration.
+    /// The matching `NSScreen` is found by native display id, not by frame:
+    /// `SCDisplay.frame` and `NSScreen.frame` are not guaranteed to share a
+    /// coordinate space, and a frame comparison silently falls back to a
+    /// scale of 1 on the wrong match, which would capture non-Retina
+    /// resolution. The matched screen supplies the AppKit-space frame the
+    /// rest of the app reasons in, plus the backing scale factor.
     private static func describe(_ display: SCDisplay) -> DisplayInfo {
-        let frame = display.frame
+        let screen = NSScreen.screens.first { candidate in
+            (candidate.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?
+                .uint32Value == display.displayID
+        }
+
+        let frame = screen?.frame ?? display.frame
         let origin = Point(x: Double(frame.origin.x), y: Double(frame.origin.y))
         let size = Size(width: Double(frame.width), height: Double(frame.height))
-
-        let screen = NSScreen.screens.first { candidate in
-            let candidateFrame = candidate.frame
-            return abs(candidateFrame.origin.x - frame.origin.x) < 1
-                && abs(candidateFrame.origin.y - frame.origin.y) < 1
-                && abs(candidateFrame.width - frame.width) < 1
-        }
         let scale = screen?.backingScaleFactor ?? 1
 
         return DisplayInfo(

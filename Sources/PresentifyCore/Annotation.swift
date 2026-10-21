@@ -19,12 +19,17 @@ public enum AnnotationTool: String, Hashable, Sendable, Codable, CaseIterable {
     case laserPointer
 
     /// Whether the tool is one that produces a persistent annotation.
+    ///
+    /// `.blur`, `.spotlight` and `.laserPointer` are modelled for the future
+    /// but the renderer draws nothing for them, so they must never claim to
+    /// produce an annotation: doing so would let "ghost" annotations pile up
+    /// in the document without ever being visible.
     public var producesAnnotation: Bool {
         switch self {
         case .pen, .line, .arrow, .rectangle, .ellipse, .text,
-             .blur, .highlighter, .stepNumber:
+             .highlighter, .stepNumber:
             true
-        case .spotlight, .laserPointer:
+        case .spotlight, .blur, .laserPointer:
             false
         }
     }

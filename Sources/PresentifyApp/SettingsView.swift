@@ -12,6 +12,9 @@ typealias AnnotationColor = PresentifyCore.Color
 struct SettingsView: View {
     @ObservedObject var coordinator: AppCoordinator
 
+    /// Tools whose annotations the renderer actually draws.
+    private static let selectableTools = AnnotationTool.allCases.filter { $0.producesAnnotation }
+
     var body: some View {
         TabView {
             toolSettings
@@ -30,7 +33,7 @@ struct SettingsView: View {
         Form {
             Section("Tool") {
                 Picker("Tool", selection: $coordinator.settings.tool) {
-                    ForEach(AnnotationTool.allCases, id: \.self) { tool in
+                    ForEach(Self.selectableTools, id: \.self) { tool in
                         Text(tool.displayName).tag(tool)
                     }
                 }
@@ -133,8 +136,9 @@ struct SettingsView: View {
     }
 }
 
-/// The row of colour swatches.
-private struct ColorPalette: View {
+/// The row of colour swatches, shared by the settings window and the
+/// annotation toolbar.
+struct ColorPalette: View {
     @Binding var selection: AnnotationColor
 
     var body: some View {

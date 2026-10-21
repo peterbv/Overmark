@@ -20,6 +20,11 @@ public final class OverlayController {
     private var entries: [CGDirectDisplayID: PanelEntry] = [:]
     private let captureService: ScreenCaptureService
 
+    /// Whether a build of the overlays is currently running.
+    private var isBuilding = false
+    /// Background settings that arrived while a build was running.
+    private var pendingBackgrounds: [CGDirectDisplayID: CGImage]?
+
     /// The handler invoked when a canvas produces an annotation.
     private var onAnnotationCreated: ((Annotation) -> Void)?
     /// The handler invoked when the canvas is clicked.
@@ -39,6 +44,30 @@ public final class OverlayController {
     ///   its own display; a display without a screenshot simply gets a
     ///   transparent overlay.
     public func showOverlays(backgrounds: [CGDirectDisplayID: CGImage] = [:]) async {
+        // Two overlapping builds would interleave their `await`s and leave
+        // orphaned panels on screen. Serialize: the latest request wins and
+        // is chained after the running build instead of racing it.
+        guard !isBuilding else {
+            pendingBackgrounds = backgrounds
+            return
+        }
+        isBuilding = true
+
+        var current = backgrounds
+        repeat {
+            pendingBackgrounds = nil
+            await buildOverlays(backgrounds: current)
+            if let pending = pendingBackgrounds {
+                current = pending
+                continue
+            }
+            break
+        } while true
+
+        isBuilding = false
+    }
+
+    private func buildOverlays(backgrounds: [CGDirectDisplayID: CGImage]) async {
         tearDown()
 
         guard let displays = try? await captureService.availableDisplays() else { return }
@@ -57,6 +86,7 @@ public final class OverlayController {
 
             let canvas = AnnotationCanvasView(frame: rect)
             canvas.screen = display.screen
+            canvas.menuBarHeight = Self.menuBarHeight(for: display.screen)
             canvas.tool = .pen
             canvas.autoresizingMask = [.width, .height]
             canvas.wantsLayer = true
@@ -97,7 +127,10 @@ public final class OverlayController {
     /// Sets the tool, colour and width used for new annotations.
     public func apply(settings: ToolSettings) {
         for entry in entries.values {
-            entry.canvas.tool = settings.tool
+            // The palette only ever offers tools the renderer can draw, but
+            // guard anyway: routing a ghost tool into the canvas would
+            // otherwise produce invisible annotations.
+            entry.canvas.tool = settings.tool.producesAnnotation ? settings.tool : .pen
             entry.canvas.color = settings.color
             entry.canvas.lineWidth = settings.lineWidth
             entry.canvas.fillsShapes = settings.fillsShapes
@@ -144,12 +177,30 @@ public final class OverlayController {
         let imageHeight = CGFloat(background.height)
         guard imageWidth > 0, imageHeight > 0 else { return }
 
-        // Scale the image so it covers the canvas while preserving its aspect
-        // ratio, matching how the screenshot was taken of this display.
-        let scaleX = canvas.bounds.width / imageWidth
-        let scaleY = canvas.bounds.height / imageHeight
+        // `contentsScale` is the layer's backing pixels *per point*. The
+        // screenshot arrives in device pixels, so the scale is pixels ÷
+        // points — the inverse of point ÷ pixels. The inverted version
+        // downsampled every screenshot to a fraction of its resolution,
+        // which showed as blurry overlays under Retina-quality strokes.
+        let scaleX = imageWidth / max(canvas.bounds.width, 1)
+        let scaleY = imageHeight / max(canvas.bounds.height, 1)
         layer.contentsScale = max(scaleX, scaleY)
 
         canvas.layer?.addSublayer(layer)
+    }
+
+    /// The height of the menu bar for the screen a canvas covers.
+    ///
+    /// Falling out of the matching `NSScreen` keeps the canvas in sync with
+    /// whatever menu bar or notch the display actually has; screens with no
+    /// menu bar (or an auto-hidden one) yield zero and keep the whole canvas
+    /// drawable.
+    private static func menuBarHeight(for screen: ScreenFrame) -> Double {
+        let match = NSScreen.screens.first { candidate in
+            abs(candidate.frame.origin.x - screen.origin.x) < 1
+                && abs(candidate.frame.origin.y - screen.origin.y) < 1
+        }
+        guard let match else { return 0 }
+        return Double(max(match.frame.height - match.visibleFrame.height, 0))
     }
 }

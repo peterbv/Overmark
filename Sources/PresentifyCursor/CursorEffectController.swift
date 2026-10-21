@@ -19,6 +19,11 @@ public final class CursorEffectController {
     private var entries: [CGDirectDisplayID: WindowEntry] = [:]
     private let captureService: ScreenCaptureService
 
+    /// Whether a window rebuild is currently running.
+    private var isRebuilding = false
+    /// The newest settings that arrived while a rebuild was running.
+    private var pendingEffects: CursorEffects?
+
     public init(captureService: ScreenCaptureService) {
         self.captureService = captureService
     }
@@ -27,14 +32,63 @@ public final class CursorEffectController {
     public private(set) var effects = CursorEffects()
 
     /// Shows the effect windows on every display.
+    ///
+    /// Settings sliders fire one event per tick, so bursts of overlapping
+    /// rebuilds are the norm rather than the exception. Overlapping builds
+    /// would interleave their `await`s and litter the screen with orphaned
+    /// windows; instead the running build coalesces the newest request and
+    /// chains it.
     public func show(effects: CursorEffects) async {
+        guard !isRebuilding else {
+            pendingEffects = effects
+            return
+        }
+        isRebuilding = true
+
+        var current = effects
+        repeat {
+            pendingEffects = nil
+            await rebuild(effects: current)
+            if let pending = pendingEffects {
+                current = pending
+                continue
+            }
+            break
+        } while true
+
+        isRebuilding = false
+    }
+
+    /// Applies new effects, updating the windows in place when possible.
+    ///
+    /// A rebuild is only needed when no windows exist yet, when everything
+    /// turns off, or when the zoom lens turns on without a background
+    /// screenshot to magnify. Everything else — nudging the zoom factor,
+    /// toggling the highlight on top of an already-built spotlight — only
+    /// pushes values into the existing views, so sliders stay smooth.
+    public func apply(effects: CursorEffects) async {
+        let hadBackgrounds = entries.values.contains { $0.view.backgroundImage != nil }
+        let needsRebuild = entries.isEmpty
+            || effects == CursorEffects()
+            || (effects.isZoomEnabled && !hadBackgrounds)
+
+        guard !needsRebuild else {
+            await show(effects: effects)
+            return
+        }
+        update(effects: effects)
+    }
+
+    private func rebuild(effects: CursorEffects) async {
         self.effects = effects
         tearDown()
 
         guard effects != CursorEffects() else { return }
         guard let displays = try? await captureService.availableDisplays() else { return }
 
-        // The zoom lens needs a picture of the screen to magnify.
+        // The zoom lens needs a picture of the screen to magnify. The
+        // capture runs while no effect window is visible, so the lens does
+        // not end up magnifying its own dimming layer.
         let background = await captureBackground(displays: displays)
 
         for display in displays {

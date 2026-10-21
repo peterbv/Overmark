@@ -35,11 +35,11 @@ public final class AppCoordinator: ObservableObject {
 
     /// The cursor effects currently enabled.
     ///
-    /// The zoom lens magnifies a screenshot of the screen, so the effect
-    /// windows are rebuilt whenever the settings change rather than merely
-    /// updated.
+    /// The effects are applied without rebuilding their windows unless the
+    /// change genuinely needs one (see `CursorEffectController.apply`),
+    /// which keeps the spotlight/zoom controls smooth while they change.
     @Published public var cursorEffects = CursorEffects() {
-        didSet { Task { await effectController.show(effects: cursorEffects) } }
+        didSet { Task { await effectController.apply(effects: cursorEffects) } }
     }
 
     /// The most recent error message, shown in the UI.
@@ -54,6 +54,12 @@ public final class AppCoordinator: ObservableObject {
     private let hotKeys: HotKeyManager
     private let cursorTracker: CursorTracker
     private let permissionService: PermissionService
+    /// The floating control bar shown while annotating.
+    private var toolbar: AnnotationToolbarController?
+
+    /// Opens the app's settings window; wired by the app delegate, which
+    /// owns that window.
+    public var onShowAppSettings: (() -> Void)?
 
     /// Retains the delegate of the text editor window.
     ///
@@ -98,6 +104,8 @@ public final class AppCoordinator: ObservableObject {
         hotKeys.registerDefaults()
         permissionService.refresh()
         permissions = permissionService.state
+
+        toolbar = AnnotationToolbarController(coordinator: self)
     }
 
     // MARK: - Lifecycle
@@ -115,6 +123,7 @@ public final class AppCoordinator: ObservableObject {
     public func stop() {
         cursorTracker.stop()
         hotKeys.unregisterAll()
+        toolbar?.hide()
         overlay.tearDown()
         effectController.tearDown()
         mode = .idle
@@ -181,6 +190,7 @@ public final class AppCoordinator: ObservableObject {
 
     /// Leaves annotation mode and removes the overlays.
     public func exitAnnotationMode() {
+        toolbar?.hide()
         overlay.tearDown()
         mode = .idle
     }
@@ -229,6 +239,12 @@ public final class AppCoordinator: ObservableObject {
             overlay.setAnnotations(document.annotations)
             overlay.apply(settings: settings)
             mode = .annotating
+
+            // The control bar is what makes annotation mode self-serve: no
+            // hot keys required to switch tools, undo a stroke or stop.
+            if let screen = NSScreen.main ?? NSScreen.screens.first {
+                toolbar?.show(on: screen)
+            }
         } catch {
             lastError = "Could not capture the screen: \(error.localizedDescription)"
         }

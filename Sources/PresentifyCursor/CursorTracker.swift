@@ -62,7 +62,16 @@ public final class CursorTracker {
         // once the permission shows up.
         guard Self.hasAccessibilityPermission() else { return }
 
-        let mask = CGEventMask(1 << CGEventType.mouseMoved.rawValue)
+        // Mouse moved plus every drag variant: macOS stops emitting plain
+        // `mouseMoved` while a button is held down, so without the dragged
+        // events the spotlight, highlight ring and zoom lens would freeze
+        // whenever the user drags something across the screen.
+        let mask = CGEventMask(
+            (1 << CGEventType.mouseMoved.rawValue)
+                | (1 << CGEventType.leftMouseDragged.rawValue)
+                | (1 << CGEventType.rightMouseDragged.rawValue)
+                | (1 << CGEventType.otherMouseDragged.rawValue)
+        )
         let callback: CGEventTapCallBack = { _, _, event, refcon in
             // Pass the event through untouched; we only observe it.
             guard let refcon else { return Unmanaged.passUnretained(event) }
@@ -72,7 +81,7 @@ public final class CursorTracker {
             // The tap's run loop source is installed on the main run loop, so
             // the callback always arrives on the main thread.
             MainActor.assumeIsolated {
-                tracker.handleMouseMoved(event)
+                tracker.handleMouseEvent(event)
             }
             return Unmanaged.passUnretained(event)
         }
@@ -111,7 +120,7 @@ public final class CursorTracker {
 
     // MARK: - Private
 
-    private func handleMouseMoved(_ event: CGEvent) {
+    private func handleMouseEvent(_ event: CGEvent) {
         let location = event.location
         let point = Self.toAppKitSpace(CGPoint(x: location.x, y: location.y))
         lastLocation = point

@@ -25,6 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var menuBar: MenuBarController?
     private var statusObserver: Task<Void, Never>?
+    /// Retains the settings window so repeated "Settings…" clicks reuse it.
+    private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The app is a menu bar utility: it stays out of the Dock and out of
@@ -37,6 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         coordinator.start()
         refreshMenu()
+        coordinator.onShowAppSettings = { [weak self] in
+            self?.openSettings()
+        }
 
         // The overlay and the document change in response to hot keys and to
         // the user's drawing, so the menu is refreshed whenever they change.
@@ -103,9 +108,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func openSettings() {
+    /// Opens the app's settings window.
+    ///
+    /// The SwiftUI `Settings` scene places its window at the normal level,
+    /// which sits *below* the annotation panels: while annotating, the
+    /// window would open behind the overlays and selecting Settings would
+    /// look like nothing happened. Hosting the view in a window the
+    /// delegate owns lets this window float above the panels instead, so it
+    /// is reachable at any time — mid-presentation included.
+    func openSettings() {
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+
+        let window = settingsWindow ?? makeSettingsWindow()
+        settingsWindow = window
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+    }
+
+    private func makeSettingsWindow() -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 440),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Presentify Settings"
+        window.contentView = NSHostingView(rootView: SettingsView(coordinator: coordinator))
+        window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+        window.isReleasedWhenClosed = false
+        window.center()
+        return window
     }
 
     /// Shows the onboarding window the first time the app is launched.
