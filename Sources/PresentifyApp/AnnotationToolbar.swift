@@ -24,7 +24,7 @@ final class AnnotationToolbarController {
     func show(on screen: NSScreen) {
         hide()
 
-        let size = NSSize(width: 576, height: 104)
+        let size = NSSize(width: 680, height: 104)
         let frame = screen.frame
         let menuBarHeight = max(frame.height - screen.visibleFrame.height, 0)
         let rect = NSRect(
@@ -127,6 +127,35 @@ struct AnnotationToolbarView: View {
             Divider()
                 .frame(height: 22)
 
+            // The cursor effects live next to the drawing controls: the ring
+            // (circle.dashed), the spotlight and the zoom lens, each filled
+            // while the effect is enabled — same state the menu and hotkeys
+            // toggle.
+            EffectButton(
+                systemImage: "circle.dashed",
+                isSelected: coordinator.cursorEffects.isHighlightEnabled,
+                help: L10n.tr("Pointer highlight")
+            ) {
+                coordinator.cursorEffects.isHighlightEnabled.toggle()
+            }
+            EffectButton(
+                systemImage: "sun.max.fill",
+                isSelected: coordinator.cursorEffects.isSpotlightEnabled,
+                help: L10n.tr("Spotlight")
+            ) {
+                coordinator.cursorEffects.isSpotlightEnabled.toggle()
+            }
+            EffectButton(
+                systemImage: "plus.magnifyingglass",
+                isSelected: coordinator.cursorEffects.isZoomEnabled,
+                help: L10n.tr("Zoom lens")
+            ) {
+                coordinator.cursorEffects.isZoomEnabled.toggle()
+            }
+
+            Divider()
+                .frame(height: 22)
+
             AnnotationControlButton(
                 systemImage: coordinator.mode == .paused ? "play.fill" : "pause.fill"
             ) {
@@ -220,6 +249,36 @@ private struct ToolButton: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// A toggle button for the cursor effects (highlight ring, spotlight,
+/// zoom lens). Same shape as a tool button, but the state reads as
+/// "enabled" via a tinted icon on a subtle tinted tile instead of the
+/// solid fill that marks the selected tool.
+private struct EffectButton: View {
+    var systemImage: String
+    var isSelected: Bool
+    var help: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.white))
+                .frame(width: 32, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(
+                            isSelected
+                                ? AnyShapeStyle(.tint.opacity(0.24))
+                                : AnyShapeStyle(Color.white.opacity(0.08))
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }
 

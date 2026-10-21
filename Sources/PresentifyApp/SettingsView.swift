@@ -82,6 +82,39 @@ struct SettingsView: View {
                 Toggle(L10n.tr("Zoom lens"), isOn: $coordinator.cursorEffects.isZoomEnabled)
             }
 
+            Section(L10n.tr("Pointer highlight customization")) {
+                Slider(value: $coordinator.cursorEffects.highlightRadius, in: 20...80, step: 5) {
+                    Text(L10n.tr("Ring size"))
+                } minimumValueLabel: {
+                    Text("20")
+                } maximumValueLabel: {
+                    Text("80")
+                }
+
+                HStack(spacing: 8) {
+                    Text(L10n.tr("Ring colour"))
+                    ColorPalette(selection: $coordinator.cursorEffects.highlightColor)
+                }
+            }
+
+            Section(L10n.tr("Spotlight")) {
+                Slider(value: $coordinator.cursorEffects.spotlightRadius, in: 100...450, step: 10) {
+                    Text(L10n.tr("Hole size"))
+                } minimumValueLabel: {
+                    Text("100")
+                } maximumValueLabel: {
+                    Text("450")
+                }
+
+                Slider(value: $coordinator.cursorEffects.spotlightDimOpacity, in: 0...1, step: 0.05) {
+                    Text(L10n.tr("Dimming"))
+                } minimumValueLabel: {
+                    Text("0%")
+                } maximumValueLabel: {
+                    Text("100%")
+                }
+            }
+
             Section(L10n.tr("Zoom")) {
                 Slider(value: $coordinator.cursorEffects.zoomFactor, in: 1...6, step: 0.5) {
                     Text(L10n.tr("Magnification"))
