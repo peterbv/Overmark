@@ -48,6 +48,19 @@ struct SettingsView: View {
                 }
 
                 Toggle("Fill shapes", isOn: $coordinator.settings.fillsShapes)
+
+                Toggle("Draw with ⌥ held", isOn: $coordinator.settings.holdOptionToDraw)
+                    .help(
+                        "On: clicks pass through to the app underneath and only clicks with ⌥ (Option) held draw on the overlay. Off: the overlay captures every click outside the menu bar strip."
+                    )
+                Text(
+                    coordinator.settings.holdOptionToDraw
+                        ? "Hold ⌥ (Option) and draw to annotate. Plain clicks go to the app beneath the overlay."
+                        : "The overlay captures every click. Use the pause button on the toolbar to interact with other apps."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             Section("Colour") {

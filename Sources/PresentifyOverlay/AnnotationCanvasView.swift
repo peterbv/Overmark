@@ -68,6 +68,14 @@ public final class AnnotationCanvasView: NSView {
     /// while the user is annotating. Zero means "exhaust the whole canvas".
     public var menuBarHeight: Double = 0
 
+    /// Whether the canvas captures input only while ⌥ (Option) is held.
+    ///
+    /// On, every plain click is handed straight to the app underneath, so
+    /// the user keeps driving the app they are presenting while the overlay
+    /// is up; holding ⌥ is the explicit "draw here" gesture. Off, the canvas
+    /// owns every click outside the menu bar strip and ⌥ is not required.
+    public var holdOptionToDraw = false
+
     // MARK: - Tracking
 
     private var dragPoints: [Point] = []
@@ -176,7 +184,7 @@ public final class AnnotationCanvasView: NSView {
 
     /// Decides which clicks the canvas is allowed to swallow.
     ///
-    /// Two rules keep the screen usable while the overlay is up:
+    /// Three rules keep the screen usable while the overlay is up:
     ///
     /// - A paused overlay is fully click-through (`nil` matches nothing, so
     ///   the click falls to the app underneath while the picture stays
@@ -185,6 +193,8 @@ public final class AnnotationCanvasView: NSView {
     ///   `nil` there hands them to the window sitting below the panel: the
     ///   menu bar, the Dock and Presentify's own status item stay usable
     ///   during a presentation instead of being blocked by the canvas.
+    /// - In "hold ⌥ to draw" mode every plain click falls through and only a
+    ///   click that arrives with ⌥ held is claimed as a drawing gesture.
     public override func hitTest(_ point: NSPoint) -> NSView? {
         guard isInteractionEnabled else { return nil }
 
@@ -195,6 +205,14 @@ public final class AnnotationCanvasView: NSView {
             let inScreen = window.convertToScreen(NSRect(origin: point, size: .zero))
             let maxY = screen.origin.y + screen.size.height
             if inScreen.origin.y > maxY - menuBarHeight {
+                return nil
+            }
+        }
+
+        if holdOptionToDraw {
+            // `NSApp.currentEvent` is the mouse event being routed while the
+            // window hit-tests it.
+            guard NSApp.currentEvent?.modifierFlags.contains(.option) == true else {
                 return nil
             }
         }

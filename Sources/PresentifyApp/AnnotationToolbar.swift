@@ -24,7 +24,7 @@ final class AnnotationToolbarController {
     func show(on screen: NSScreen) {
         hide()
 
-        let size = NSSize(width: 560, height: 104)
+        let size = NSSize(width: 576, height: 104)
         let frame = screen.frame
         let menuBarHeight = max(frame.height - screen.visibleFrame.height, 0)
         let rect = NSRect(
@@ -149,7 +149,19 @@ struct AnnotationToolbarView: View {
                 .frame(width: 16)
 
             Slider(value: $coordinator.settings.lineWidth, in: 1...24, step: 1)
-                .frame(width: 130)
+                .frame(width: 110)
+
+            if coordinator.settings.holdOptionToDraw {
+                Text("⌥ draw")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.white.opacity(0.10)))
+                    .help(
+                        "While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath."
+                    )
+            }
         }
         .padding(.horizontal, 4)
     }

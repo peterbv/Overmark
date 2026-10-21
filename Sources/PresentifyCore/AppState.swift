@@ -88,18 +88,28 @@ public struct ToolSettings: Hashable, Sendable, Codable {
     public var fillsShapes: Bool
     /// The next step number to stamp.
     public var nextStepNumber: Int
+    /// Whether the canvas only captures input while ⌥ (Option) is held.
+    ///
+    /// With this on, every other click falls through to the app underneath,
+    /// which keeps the Mac usable while the overlay is up — the user draws
+    /// by holding ⌥ and drawing, and interacts normally otherwise. With it
+    /// off the canvas owns all clicks outside the menu bar strip (the older
+    /// behaviour).
+    public var holdOptionToDraw: Bool
 
     public init(
         tool: AnnotationTool = .pen,
         color: Color = .red,
         lineWidth: Double = 4,
         fillsShapes: Bool = false,
-        nextStepNumber: Int = 1
+        nextStepNumber: Int = 1,
+        holdOptionToDraw: Bool = true
     ) {
         self.tool = tool
         self.color = color
         self.lineWidth = lineWidth
         self.fillsShapes = fillsShapes
         self.nextStepNumber = nextStepNumber
+        self.holdOptionToDraw = holdOptionToDraw
     }
 }

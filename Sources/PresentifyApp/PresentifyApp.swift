@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// The main application.
@@ -24,7 +25,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let coordinator = AppCoordinator()
 
     private var menuBar: MenuBarController?
-    private var statusObserver: Task<Void, Never>?
+    /// Observes coordinator changes to rebuild the menu.
+    ///
+    /// This used to be a `for await _ in coordinator.objectWillChange.values`
+    /// loop, which dropped the app with a Combine backpressure fatal error
+    /// ("Received an output without requesting demand") whenever the publisher
+    /// fired in bursts — for example while toggling the zoom lens or entering
+    /// annotation mode. A plain Combine subscription has no such race.
+    private var statusObserver: AnyCancellable?
     /// Retains the settings window so repeated "Settings…" clicks reuse it.
     private var settingsWindow: NSWindow?
 
@@ -45,14 +53,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // The overlay and the document change in response to hot keys and to
         // the user's drawing, so the menu is refreshed whenever they change.
-        statusObserver = Task { @MainActor [weak self] in
-            guard let self else { return }
-            for await _ in coordinator.objectWillChange.values {
-                self.refreshMenu()
+        statusObserver = coordinator.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshMenu()
             }
-        }
 
         showOnboardingIfNeeded()
+
+        if ProcessInfo.processInfo.environment["PRESENTIFY_PROBE"] == "1" {
+            runDiagnosticProbe()
+        }
+    }
+
+    /// Runs a scripted stress pass over the known-crashy sequences.
+    ///
+    /// Every step prints to stderr once it completed, so a crash during the
+    /// run points at the phase whose step line never appears. Enabled only
+    /// by launching with `PRESENTIFY_PROBE=1`.
+    private func runDiagnosticProbe() {
+        let coordinator = coordinator
+        func step(_ label: String) {
+            FileHandle.standardError.write(Data("[PROBE] ok: \(label)\n".utf8))
+        }
+
+        Task {
+            do { try await Task.sleep(nanoseconds: 2_000_000_000) } catch {}
+
+            await coordinator.enterAnnotationMode()
+            step("enterAnnotationMode")
+            try? await Task.sleep(nanoseconds: 800_000_000)
+
+            coordinator.cursorEffects.isSpotlightEnabled = true
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            step("spotlight on")
+
+            coordinator.cursorEffects.isZoomEnabled = true
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            step("zoom on (apply → captureBackground → rebuild)")
+
+            coordinator.cursorEffects.isZoomEnabled = false
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            step("zoom off (apply → update in place)")
+
+            for _ in 1...12 {
+                coordinator.cursorEffects.isZoomEnabled.toggle()
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
+            step("zoom churn ×12")
+
+            coordinator.cursorEffects.isSpotlightEnabled = false
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            step("spotlight off")
+
+            await coordinator.toggleAnnotationMode()
+            step("exitAnnotationMode")
+            try? await Task.sleep(nanoseconds: 400_000_000)
+
+            await coordinator.toggleAnnotationMode()
+            step("re-enterAnnotationMode")
+            try? await Task.sleep(nanoseconds: 800_000_000)
+
+            coordinator.exitAnnotationMode()
+            step("final exitAnnotationMode")
+
+            FileHandle.standardError.write(Data("[PROBE] all steps done, exiting cleanly\n".utf8))
+            exit(0)
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -64,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        statusObserver?.cancel()
+        statusObserver = nil
         coordinator.stop()
     }
 

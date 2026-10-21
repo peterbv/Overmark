@@ -135,6 +135,7 @@ public final class OverlayController {
             entry.canvas.lineWidth = settings.lineWidth
             entry.canvas.fillsShapes = settings.fillsShapes
             entry.canvas.nextStepNumber = settings.nextStepNumber
+            entry.canvas.holdOptionToDraw = settings.holdOptionToDraw
         }
     }
 
