@@ -152,14 +152,14 @@ struct AnnotationToolbarView: View {
                 .frame(width: 110)
 
             if coordinator.settings.holdOptionToDraw {
-                Text("⌥ draw")
+                Text(L10n.tr("⌥ draw"))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.65))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.white.opacity(0.10)))
                     .help(
-                        "While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath."
+                        L10n.tr("While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath.")
                     )
             }
         }
@@ -170,7 +170,7 @@ struct AnnotationToolbarView: View {
         Button {
             Task { await coordinator.toggleAnnotationMode() }
         } label: {
-            Label("Done", systemImage: "checkmark")
+            Label(L10n.tr("Done"), systemImage: "checkmark")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
@@ -178,7 +178,7 @@ struct AnnotationToolbarView: View {
         }
         .buttonStyle(.plain)
         .background(Capsule().fill(Color.red.opacity(0.85)))
-        .help("Finish annotating")
+        .help(L10n.tr("Finish annotating"))
     }
 }
 

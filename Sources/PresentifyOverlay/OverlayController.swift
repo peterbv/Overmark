@@ -25,6 +25,18 @@ public final class OverlayController {
     /// Background settings that arrived while a build was running.
     private var pendingBackgrounds: [CGDirectDisplayID: CGImage]?
 
+    /// Watches the ⌥ key while the overlays are on screen so the panels can
+    /// toggle window-level pass-through (see `refreshMouseTransparency`).
+    private var optionMonitor: OptionKeyMonitor?
+    /// Whether the ⌥ modifier is currently held system-wide.
+    private var isOptionHeld = false
+    /// Whether the canvases run in "hold ⌥ to draw" mode.
+    private var isOptionToDrawMode = false
+    /// Whether the ⌥ tap could be created. When the Accessibility permission
+    /// is missing it cannot, and the hold-⌥ mode degrades to classic
+    /// always-drawing so the app never becomes unusable.
+    private var canMonitorOption = true
+
     /// The handler invoked when a canvas produces an annotation.
     private var onAnnotationCreated: ((Annotation) -> Void)?
     /// The handler invoked when the canvas is clicked.
@@ -105,10 +117,14 @@ public final class OverlayController {
 
             entries[display.displayID] = PanelEntry(panel: panel, canvas: canvas)
         }
+
+        startOptionMonitoring()
+        refreshMouseTransparency()
     }
 
     /// Removes all overlays.
     public func tearDown() {
+        stopOptionMonitoring()
         for entry in entries.values {
             entry.panel.dismiss()
             entry.panel.contentView = nil
@@ -126,6 +142,11 @@ public final class OverlayController {
 
     /// Sets the tool, colour and width used for new annotations.
     public func apply(settings: ToolSettings) {
+        // The hold-⌥ mode only makes sense while the key can be observed;
+        // without it the canvases would swallow every click and the app
+        // would be unusable.
+        isOptionToDrawMode = settings.holdOptionToDraw && canMonitorOption
+
         for entry in entries.values {
             // The palette only ever offers tools the renderer can draw, but
             // guard anyway: routing a ghost tool into the canvas would
@@ -135,8 +156,9 @@ public final class OverlayController {
             entry.canvas.lineWidth = settings.lineWidth
             entry.canvas.fillsShapes = settings.fillsShapes
             entry.canvas.nextStepNumber = settings.nextStepNumber
-            entry.canvas.holdOptionToDraw = settings.holdOptionToDraw
+            entry.canvas.holdOptionToDraw = isOptionToDrawMode
         }
+        refreshMouseTransparency()
     }
 
     /// Enables or disables drawing across every canvas.
@@ -144,6 +166,7 @@ public final class OverlayController {
         for entry in entries.values {
             entry.canvas.isInteractionEnabled = enabled
         }
+        refreshMouseTransparency()
     }
 
     /// Routes canvas callbacks to the given handlers.
@@ -203,5 +226,74 @@ public final class OverlayController {
         }
         guard let match else { return 0 }
         return Double(max(match.frame.height - match.visibleFrame.height, 0))
+    }
+
+    // MARK: - Pass-through
+
+    /// Starts watching the ⌥ modifier for the hold-⌥-to-draw mode.
+    ///
+    /// `hitTest`-level filtering cannot forward a click to another app: by
+    /// the time the view stack runs, the window server has already decided
+    /// the topmost window owns the event, and returning `nil` just drops it.
+    /// The panels therefore alternate `ignoresMouseEvents` — server-level
+    /// transparency — based on the live key state, which keeps every other
+    /// app clickable while the overlay is on screen.
+    private func startOptionMonitoring() {
+        if optionMonitor == nil {
+            let monitor = OptionKeyMonitor { [weak self] held in
+                self?.handleOptionStateChanged(held)
+            }
+            guard monitor.start() else {
+                // Without the Accessibility permission the ⌥ key cannot be
+                // observed; degrade to the classic always-draws mode so the
+                // app stays usable (Pause provides desktop interaction).
+                canMonitorOption = false
+                isOptionToDrawMode = false
+                for entry in entries.values {
+                    entry.canvas.holdOptionToDraw = false
+                }
+                return
+            }
+            optionMonitor = monitor
+            canMonitorOption = true
+        }
+    }
+
+    private func handleOptionStateChanged(_ held: Bool) {
+        isOptionHeld = held
+        if !held {
+            // The panels stop accepting events exactly when ⌥ is released,
+            // so a stroke in flight can never see its own `mouseUp`; discard
+            // the half-drawn annotation instead of leaving it stuck on
+            // screen.
+            for entry in entries.values {
+                entry.canvas.cancelPendingStroke()
+            }
+        }
+        refreshMouseTransparency()
+    }
+
+    private func stopOptionMonitoring() {
+        optionMonitor?.stop()
+        optionMonitor = nil
+        isOptionHeld = false
+    }
+
+    /// Syncs `ignoresMouseEvents` on every panel with the current mode.
+    ///
+    /// This is the switch the window server honours: with the flag on, clicks
+    /// reach the Dock, the menu bar and the apps underneath; with it off —
+    /// only while ⌥ is held in hold-⌥-to-draw mode — the panels receive the
+    /// drawing gestures.
+    private func refreshMouseTransparency() {
+        for entry in entries.values {
+            let accepts: Bool
+            if isOptionToDrawMode {
+                accepts = entry.canvas.isInteractionEnabled && isOptionHeld
+            } else {
+                accepts = entry.canvas.isInteractionEnabled
+            }
+            entry.panel.ignoresMouseEvents = !accepts
+        }
     }
 }

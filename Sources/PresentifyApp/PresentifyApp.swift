@@ -199,7 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Presentify Settings"
+        window.title = L10n.tr("Presentify Settings")
         window.contentView = NSHostingView(rootView: SettingsView(coordinator: coordinator))
         window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
         window.isReleasedWhenClosed = false
@@ -221,7 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Presentify Setup"
+        window.title = L10n.tr("Presentify Setup")
         window.contentView = NSHostingView(
             rootView: OnboardingView(coordinator: coordinator)
         )

@@ -180,6 +180,20 @@ public final class AnnotationCanvasView: NSView {
         mouseDownPoint = nil
     }
 
+    /// Discards any half-drawn stroke.
+    ///
+    /// Used when the ⌥-pass-through mode changes under an active gesture: the
+    /// panels stop accepting events mid-stroke the moment ⌥ is released, so
+    /// the canvas would never receive `mouseUp` and the half-drawn annotation
+    /// would stay stuck on screen.
+    public func cancelPendingStroke() {
+        inProgress = nil
+        isDragging = false
+        dragPoints = []
+        mouseDownPoint = nil
+        needsDisplay = true
+    }
+
     // MARK: - Hit testing
 
     /// Decides which clicks the canvas is allowed to swallow.

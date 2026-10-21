@@ -58,7 +58,7 @@ public final class MenuBarController {
         let menu = NSMenu()
 
         let toggle = NSMenuItem(
-            title: mode == .idle ? "Start Annotating" : "Stop Annotating",
+            title: mode == .idle ? L10n.tr("Start Annotating") : L10n.tr("Stop Annotating"),
             action: #selector(handleToggleAnnotation),
             keyEquivalent: ""
         )
@@ -67,7 +67,7 @@ public final class MenuBarController {
 
         if mode != .idle {
             let pause = NSMenuItem(
-                title: mode == .paused ? "Resume" : "Pause",
+                title: mode == .paused ? L10n.tr("Resume") : L10n.tr("Pause"),
                 action: #selector(handleTogglePause),
                 keyEquivalent: ""
             )
@@ -77,12 +77,12 @@ public final class MenuBarController {
 
         menu.addItem(.separator())
 
-        let undo = NSMenuItem(title: "Undo", action: #selector(handleUndo), keyEquivalent: "")
+        let undo = NSMenuItem(title: L10n.tr("Undo"), action: #selector(handleUndo), keyEquivalent: "")
         undo.target = self
         undo.isEnabled = canUndo
         menu.addItem(undo)
 
-        let redo = NSMenuItem(title: "Redo", action: #selector(handleRedo), keyEquivalent: "")
+        let redo = NSMenuItem(title: L10n.tr("Redo"), action: #selector(handleRedo), keyEquivalent: "")
         redo.target = self
         redo.isEnabled = canRedo
         menu.addItem(redo)
@@ -90,7 +90,7 @@ public final class MenuBarController {
         menu.addItem(.separator())
 
         let copy = NSMenuItem(
-            title: "Copy Screenshot",
+            title: L10n.tr("Copy Screenshot"),
             action: #selector(handleCopyScreenshot),
             keyEquivalent: ""
         )
@@ -98,7 +98,7 @@ public final class MenuBarController {
         menu.addItem(copy)
 
         let save = NSMenuItem(
-            title: "Save Screenshot…",
+            title: L10n.tr("Save Screenshot…"),
             action: #selector(handleSaveScreenshot),
             keyEquivalent: ""
         )
@@ -108,14 +108,18 @@ public final class MenuBarController {
         menu.addItem(.separator())
 
         let settings = NSMenuItem(
-            title: "Settings…",
+            title: L10n.tr("Settings…"),
             action: #selector(handleShowSettings),
             keyEquivalent: ""
         )
         settings.target = self
         menu.addItem(settings)
 
-        let quit = NSMenuItem(title: "Quit Presentify", action: #selector(handleQuit), keyEquivalent: "")
+        let quit = NSMenuItem(
+            title: L10n.tr("Quit Presentify"),
+            action: #selector(handleQuit),
+            keyEquivalent: ""
+        )
         quit.target = self
         menu.addItem(quit)
 

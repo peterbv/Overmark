@@ -45,6 +45,18 @@ public final class AppCoordinator: ObservableObject {
     /// The most recent error message, shown in the UI.
     @Published public var lastError: String?
 
+    /// The app's user-facing language, shown in the General settings tab.
+    ///
+    /// Every window re-renders when this changes because all of them observe
+    /// the coordinator; the status-bar menu rebuilds on the same signal.
+    @Published public var language: L10n.Language = .spanish {
+        didSet {
+            guard language != oldValue else { return }
+            L10n.selected = L10n.resolve(language)
+            UserDefaults.standard.set(language.rawValue, forKey: "Presentify.language")
+        }
+    }
+
     /// The permission state.
     @Published public private(set) var permissions: PermissionState = PermissionState()
 
@@ -106,6 +118,14 @@ public final class AppCoordinator: ObservableObject {
         hotKeys.registerDefaults()
         permissionService.refresh()
         permissions = permissionService.state
+
+        // Restore the persisted language before any view is built so the
+        // onboarding window and the status-bar menu come up translated.
+        let stored = L10n.Language(
+            rawValue: UserDefaults.standard.string(forKey: "Presentify.language") ?? ""
+        ) ?? .spanish
+        L10n.selected = L10n.resolve(stored)
+        self.language = stored
 
         toolbar = AnnotationToolbarController(coordinator: self)
     }
@@ -185,7 +205,7 @@ public final class AppCoordinator: ObservableObject {
 
         let granted = await requestPermission(.screenRecording)
         guard granted else {
-            lastError = "Presentify needs Screen Recording access to capture the screen."
+            lastError = L10n.tr("Presentify needs Screen Recording access to capture the screen.")
             return
         }
         await presentOverlays()
@@ -228,7 +248,7 @@ public final class AppCoordinator: ObservableObject {
         do {
             let snapshots = try await captureService.captureAllDisplays()
             guard !snapshots.isEmpty else {
-                lastError = "No displays were available to annotate."
+                lastError = L10n.tr("No displays were available to annotate.")
                 return
             }
 
@@ -254,7 +274,7 @@ public final class AppCoordinator: ObservableObject {
             // bar ever fails to appear.
             registerEscapeHotKey()
         } catch {
-            lastError = "Could not capture the screen: \(error.localizedDescription)"
+            lastError = "\(L10n.tr("Could not capture the screen:")) \(error.localizedDescription)"
         }
     }
 
@@ -349,7 +369,7 @@ public final class AppCoordinator: ObservableObject {
             backing: .buffered,
             defer: false
         )
-        window.title = "Add Text"
+        window.title = L10n.tr("Add Text")
         // The overlay panels float at `.statusBar` level and cover every
         // screen, so a normal window would open behind them — invisible and
         // unable to receive the keystrokes. The editor is placed just above
@@ -429,7 +449,7 @@ public final class AppCoordinator: ObservableObject {
     /// Copies a fresh screenshot of the screen to the clipboard.
     public func copyScreenshot() async {
         guard let image = await captureCurrentScreenImage() else {
-            lastError = "Could not capture the screen."
+            lastError = L10n.tr("Could not capture the screen.")
             return
         }
 
@@ -443,7 +463,7 @@ public final class AppCoordinator: ObservableObject {
     /// Saves a fresh screenshot to disk.
     public func saveScreenshot() async {
         guard let image = await captureCurrentScreenImage() else {
-            lastError = "Could not capture the screen."
+            lastError = L10n.tr("Could not capture the screen.")
             return
         }
 

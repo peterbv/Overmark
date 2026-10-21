@@ -20,7 +20,7 @@ struct TextAnnotationEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("Type your text", text: $text)
+            TextField(L10n.tr("Type your text"), text: $text)
                 .textFieldStyle(.roundedBorder)
                 .focused($isFocused)
                 .onSubmit(commit)
@@ -33,16 +33,16 @@ struct TextAnnotationEditorView: View {
                         Circle().strokeBorder(.primary.opacity(0.3), lineWidth: 1)
                     }
 
-                Text("Size \(Int(lineWidth))")
+                Text("\(L10n.tr("Size")) \(Int(lineWidth))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
-                Button("Cancel", action: onCancel)
+                Button(L10n.tr("Cancel"), action: onCancel)
                     .keyboardShortcut(.cancelAction)
 
-                Button("Add", action: commit)
+                Button(L10n.tr("Add"), action: commit)
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

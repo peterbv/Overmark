@@ -13,9 +13,9 @@ struct OnboardingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Welcome to Presentify")
+                Text(L10n.tr("Welcome to Presentify"))
                     .font(.largeTitle.bold())
-                Text("Two permissions are needed to annotate your screen. You can change them later in System Settings.")
+                Text(L10n.tr("Two permissions are needed to annotate your screen. You can change them later in System Settings."))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -35,14 +35,14 @@ struct OnboardingView: View {
 
             HStack {
                 if !coordinator.permissions.isFullyGranted {
-                    Text("Some features stay unavailable until every permission is granted.")
+                    Text(L10n.tr("Some features stay unavailable until every permission is granted."))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                Button("Continue") {
+                Button(L10n.tr("Continue")) {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -85,9 +85,9 @@ private struct PermissionRow: View {
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(kind.title)
+                Text(L10n.tr(kind.title))
                     .font(.headline)
-                Text(kind.explanation)
+                Text(L10n.tr(kind.explanation))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -99,10 +99,10 @@ private struct PermissionRow: View {
                 statusLabel
 
                 if status != .granted {
-                    Button("Grant Access", action: onRequest)
+                    Button(L10n.tr("Grant Access"), action: onRequest)
                         .buttonStyle(.borderedProminent)
 
-                    Button("Open Settings", action: onOpenSettings)
+                    Button(L10n.tr("Open Settings"), action: onOpenSettings)
                         .buttonStyle(.link)
                 }
             }
@@ -118,15 +118,15 @@ private struct PermissionRow: View {
     private var statusLabel: some View {
         switch status {
         case .granted:
-            Label("Granted", systemImage: "checkmark.circle.fill")
+            Label(L10n.tr("Granted"), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
                 .font(.callout.weight(.medium))
         case .denied:
-            Label("Denied", systemImage: "xmark.circle.fill")
+            Label(L10n.tr("Denied"), systemImage: "xmark.circle.fill")
                 .foregroundStyle(.red)
                 .font(.callout.weight(.medium))
         case .notDetermined:
-            Label("Not set up", systemImage: "circle.dashed")
+            Label(L10n.tr("Not set up"), systemImage: "circle.dashed")
                 .foregroundStyle(.secondary)
                 .font(.callout.weight(.medium))
         }
