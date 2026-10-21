@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		Presentify runs with the hardened runtime, so it needs to declare what
+		it does with protected resources.
+
+		Note that the two permissions the app relies on — Screen Recording and
+		Accessibility — are *not* granted through this file. They are TCC
+		permissions, controlled by the user's Privacy & Security settings and
+		keyed on the bundle identifier. This file only covers what the hardened
+		runtime enforces on top of that.
+	-->
+
+	<!--
+		The app is not sandboxed: it has to read the screen, observe global
+		input events and draw over other apps, none of which a sandboxed app
+		is allowed to do.
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+</dict>
+</plist>

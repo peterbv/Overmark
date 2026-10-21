@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:PresentationApp}",
+            "name": "Debug Presentify",
+            "target": "Presentify",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug Presentify"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:PresentationApp}",
+            "name": "Release Presentify",
+            "target": "Presentify",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release Presentify"
+        }
+    ]
+}
