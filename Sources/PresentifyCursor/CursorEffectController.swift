@@ -24,6 +24,14 @@ public final class CursorEffectController {
     /// The newest settings that arrived while a rebuild was running.
     private var pendingEffects: CursorEffects?
 
+    /// Keeps the zoom lens's background screenshots current while the lens
+    /// is up; cancelled whenever the windows are torn down or zoom turns off.
+    private var backgroundRefreshTask: Task<Void, Never>?
+    /// The last pointer position seen, used to pick the display to refresh.
+    private var lastCursorLocation: Point?
+    /// The display whose background was refreshed most recently.
+    private var lastCapturedDisplayID: CGDirectDisplayID?
+
     public init(captureService: ScreenCaptureService) {
         self.captureService = captureService
     }
@@ -77,6 +85,14 @@ public final class CursorEffectController {
             return
         }
         update(effects: effects)
+        // The refresh loop only makes sense while the lens is on: nudging
+        // the zoom factor keeps it running, turning the lens off cancels it.
+        if effects.isZoomEnabled {
+            startBackgroundRefresh()
+        } else {
+            backgroundRefreshTask?.cancel()
+            backgroundRefreshTask = nil
+        }
     }
 
     private func rebuild(effects: CursorEffects) async {
@@ -145,6 +161,14 @@ public final class CursorEffectController {
 
             entries[screen.displayID] = WindowEntry(window: window, view: view)
         }
+
+        // The lens magnifies the LIVE screen rather than the moment zoom was
+        // enabled: while it is up, a lightweight loop keeps re-capturing the
+        // display under the pointer, so windows, browsers and text stay in
+        // sync with what the user is actually doing.
+        if effects.isZoomEnabled {
+            startBackgroundRefresh()
+        }
     }
 
     /// Updates the effects without recreating the windows.
@@ -157,6 +181,7 @@ public final class CursorEffectController {
 
     /// Moves the pointer position into the effect views.
     public func updateCursorLocation(_ point: Point) {
+        lastCursorLocation = point
         for entry in entries.values {
             entry.view.cursorLocation = point
         }
@@ -164,6 +189,8 @@ public final class CursorEffectController {
 
     /// Removes the effect windows.
     public func tearDown() {
+        backgroundRefreshTask?.cancel()
+        backgroundRefreshTask = nil
         for entry in entries.values {
             entry.window.orderOut(nil)
             entry.window.close()
@@ -172,6 +199,54 @@ public final class CursorEffectController {
     }
 
     // MARK: - Private
+
+    // MARK: - Live lens background
+
+    /// Keeps the zoom lens's screenshot current.
+    ///
+    /// A lens that magnifies yesterday's picture is of little use: this
+    /// loop re-captures the display under the pointer a few times a second,
+    /// so anything that moves or redraws — app windows, browsers, edits —
+    /// shows up magnified in real time. Displays without the pointer keep
+    /// their build-time snapshot; the lens only ever draws on the display
+    /// hosting the pointer anyway.
+    private func startBackgroundRefresh() {
+        guard backgroundRefreshTask == nil, effects.isZoomEnabled, !entries.isEmpty else { return }
+        backgroundRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, let displayID = self.nextLensDisplay() else { return }
+                await self.refreshLensBackground(for: displayID)
+                try? await Task.sleep(nanoseconds: 320_000_000)
+            }
+        }
+    }
+
+    /// The display to re-capture next: the one under the pointer, or the
+    /// last one known to have hosted it.
+    private func nextLensDisplay() -> CGDirectDisplayID? {
+        guard effects.isZoomEnabled, !entries.isEmpty else { return nil }
+        if let cursor = lastCursorLocation,
+           let hosting = entries.first(
+               where: { $0.value.view.screen.frame.contains(cursor) }
+           )?.key {
+            lastCapturedDisplayID = hosting
+            return hosting
+        }
+        return lastCapturedDisplayID
+    }
+
+    /// Re-captures one display and pushes it under the lens.
+    ///
+    /// Captures exclude the controller's own effect windows, so the lens
+    /// never ends up magnifying a picture of itself.
+    private func refreshLensBackground(for displayID: CGDirectDisplayID) async {
+        guard let snapshot = try? await captureService.capture(displayID: displayID) else {
+            return
+        }
+        // The entry may have been torn down while the capture was in
+        // flight; assigning into the map then is a harmless no-op.
+        entries[displayID]?.view.backgroundImage = snapshot.image
+    }
 
     /// One AppKit screen plus the identifiers the controller keys on.
     ///
