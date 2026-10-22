@@ -43,6 +43,17 @@ presentaciones, sin congelar el escritorio.
     desvanecido no ensucia el deshacer.
   - **Edición de texto in situ**: con la herramienta Texto, un clic sobre un
     texto ya escrito lo reabre para corregirlo (mismo id/color/grosor).
+  - **Preferencias persistentes**: herramienta, color, relleno, degradado,
+    auto-borrado y efectos de cursor se recuerdan entre sesiones; datos
+    corruptos caen a los valores de fábrica sin ruido.
+  - **Trazo degradado**: los trazos funden el color inicial con uno final a
+    lo largo de la línea (Preferencias → Herramientas; el resaltador
+    permanece sólido, y los números de paso/texto no se degradan).
+  - **Colores favoritos**: el "+" de la paleta (barra y Preferencias) abre
+    el panel de color; hasta 8 colores propios, deduplicados y persistentes.
+  - **Relleno por figura**: el relleno se decide al dibujar cada figura y
+    viaja con ella — export y grabación reproducen exactamente lo que el
+    canvas mostró (antes dependía del estado global del momento).
 - Superposiciones = **lienzos transparentes** sobre el escritorio vivo: nunca se ve
   una foto estática de la pantalla; las anotaciones se ven en el momento.
 - Modo de clics: por defecto los overlays **dejan pasar los clics** al Mac
@@ -161,8 +172,12 @@ presentaciones, sin congelar el escritorio.
     temporizado (desvanece 5×120 ms y remueve sin ensuciar el undo; los
     números de paso jamás se desvanecen) y edición in situ del texto con
     la herramienta Texto.
+16. `b2e45c5` ronda de preferencias: herramienta y efectos de cursor
+    persistidos (blob JSON tolerante a corrupción), trazo degradado en 8
+    tramos, favoritos de color vía `NSColorWell` + panel del sistema y
+    relleno por figura (export/grabación fieles al canvas).
 
-`swift build` limpio · `swift test` verde: **85** pruebas Swift Testing (14 suites) +
+`swift build` limpio · `swift test` verde: **95** pruebas Swift Testing (16 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
