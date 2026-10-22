@@ -126,6 +126,11 @@ presentaciones, sin congelar el escritorio.
 12. `04c8bcf` ronda 2026-10-22: borrado por clic derecho, texto multilínea,
     export multimonitor en una sola imagen y atajos configurables con
     persistencia de overrides (nueva pestaña Atajos en Preferencias).
+13. `049f4ab` grabación por ventana viva: track fijo con escalado del
+    stream (`scalesToFit`) y burn-in que sigue la geometría por frame de
+    `SCStreamFrameInfo` (ScreenRect/ContentRect autocalibrados); la caja
+    imaginada `scalableScreenCaptureIfNeeded` no existe en el SDK —
+    `SCRecordingOutput` (que no entrega frames) fue descartado.
 
 `swift build` limpio · `swift test` verde: **79** pruebas Swift Testing (13 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
