@@ -28,6 +28,12 @@ presentaciones, sin congelar el escritorio.
     stream reescala el contenido en ambas direcciones y el burn-in sigue la
     geometría viva por frame — mover o redimensionar la ventana grabada ya
     no desplaza las anotaciones ni deja bandas de recorte.
+  - **Renombre Presentify → Overmark** (todo el repo, módulos y bundle id).
+    Motivo: Presentify es un producto comercial existente (7 años, App Store,
+    Setapp, Homebrew) con el nombre y dominio ocupados; Overmark está libre
+    en la categoría de anotación de pantalla y overmark.app sin registrar.
+    La única colisión (un SaaS de agencias IA) es de otro rubro. El cambio
+    de bundle id hace que la app vuelva a pedir Permisos una única vez.
 - Superposiciones = **lienzos transparentes** sobre el escritorio vivo: nunca se ve
   una foto estática de la pantalla; las anotaciones se ven en el momento.
 - Modo de clics: por defecto los overlays **dejan pasar los clics** al Mac
@@ -131,6 +137,10 @@ presentaciones, sin congelar el escritorio.
     `SCStreamFrameInfo` (ScreenRect/ContentRect autocalibrados); la caja
     imaginada `scalableScreenCaptureIfNeeded` no existe en el SDK —
     `SCRecordingOutput` (que no entrega frames) fue descartado.
+14. `5a1d676` renombre Presentify → Overmark (marca, módulos SwiftPM,
+    bundle id `com.overmark.app`) + `build/` sacado del tracking (estaba
+    comiteado por accidente, binario incluido). Chequeo de marca previo:
+    sin colisión en la categoría; overmark.app libre.
 
 `swift build` limpio · `swift test` verde: **79** pruebas Swift Testing (13 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
