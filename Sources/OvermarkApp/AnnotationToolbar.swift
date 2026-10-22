@@ -291,7 +291,7 @@ struct AnnotationToolbarView: View {
         .highlighter: "highlighter",
         .arrow: "arrow.up.right",
         .rectangle: "rectangle",
-        .ellipse: "ellipse",
+        .ellipse: "oval",
         .text: "textformat",
         .stepNumber: "number.circle",
     ]
