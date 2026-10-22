@@ -72,6 +72,7 @@ public enum L10n {
             "Elige qué pantallas cubre la capa de anotación",
         "⌥ draw": "⌥ dibujar",
         "capture mode": "modo de captura",
+        "capture all": "captura todo",
         "Drag here to move the toolbar": "Arrastrá acá para mover la barra",
         "Auto-hide": "Auto-ocultar",
         "Show the controls": "Mostrar los controles",
@@ -89,6 +90,8 @@ public enum L10n {
         "Right-click deletes an annotation": "Clic derecho borra una anotación",
         "The overlay captures every click until Accessibility is granted (System Settings → Privacy & security → Accessibility). Press here to open it.":
             "El overlay captura todos los clics hasta que concedas Accesibilidad (Ajustes del Sistema → Privacidad y seguridad → Accesibilidad). Toca aquí para abrirla.",
+            "The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here and turn \"Draw while holding ⌥\" back on.":
+            "La capa captura todos los clics por elección. Usá pausa (⌘⇧S) para interactuar con otras apps, o tocá acá y reactivá \"Dibujar manteniendo ⌥\".",
         "While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath.":
             "Con \"⌥ dibujar\" activo, solo los clics con ⌥ (Opción) mantenida dibujan sobre la capa; los demás clics van a la app que está debajo.",
 

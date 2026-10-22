@@ -466,6 +466,22 @@ struct AnnotationToolbarView: View {
                             }
                         }
                 }
+            } else {
+                // Capturing every click is a *chosen* mode; without a chip it
+                // reads as "broken" from the toolbar and the escape hatches
+                // (pause, the toggle back on) stay hidden.
+                Text(L10n.tr("capture all"))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.blue.opacity(0.22)))
+                    .help(
+                        L10n.tr("The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here and turn \"Draw while holding ⌥\" back on.")
+                    )
+                    .onTapGesture {
+                        coordinator.onShowAppSettings?()
+                    }
             }
         }
         .padding(.horizontal, 4)
