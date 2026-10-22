@@ -34,6 +34,15 @@ presentaciones, sin congelar el escritorio.
     en la categoría de anotación de pantalla y overmark.app sin registrar.
     La única colisión (un SaaS de agencias IA) es de otro rubro. El cambio
     de bundle id hace que la app vuelva a pedir Permisos una única vez.
+  - **Aro configurable**: forma (círculo, squircle o rombo), grosor de borde
+    (1–12 pt) y opacidad del relleno (0–80%), además del radio y color previos.
+  - **Ondas de clic**: animación al pulsar (variante para el clic derecho),
+    desactivable en Preferencias → Cursor → Animación de clic.
+  - **Auto-borrado temporizado**: los trazos se desvanecen solos tras un
+    retardo configurable (3–60 s). No toca nunca los números de paso y el
+    desvanecido no ensucia el deshacer.
+  - **Edición de texto in situ**: con la herramienta Texto, un clic sobre un
+    texto ya escrito lo reabre para corregirlo (mismo id/color/grosor).
 - Superposiciones = **lienzos transparentes** sobre el escritorio vivo: nunca se ve
   una foto estática de la pantalla; las anotaciones se ven en el momento.
 - Modo de clics: por defecto los overlays **dejan pasar los clics** al Mac
@@ -53,13 +62,17 @@ presentaciones, sin congelar el escritorio.
   chip verde "Grabación guardada" que abre Finder al terminar), pausa, engranaje, "Listo".
 - El ítem del menú de la barra tiene la misma pantalla de anotación como submenú
   con marcas de verificación (disponible estando en modo anotación).
-- **Arrastrable** por la moving de la parte superior y con **snap magnético a las 4 esquinas**.
+- **Arrastrable** por la banda de la parte superior y con **snap magnético a las 4 esquinas**.
 - **Auto-ocultar** (esta es la entrada): se colapsa a una pestaña al soltar el cursor,
   reaparece al pasar por encima o arrastrar la pestaña.
 - Botón **?** → panel flotante de atajos de teclado (es/no según idioma).
 
 ### Efectos de cursor
-- **Resaltador**: aro configurable (radio 20–80, color de la paleta).
+- **Resaltador**: aro configurable (radio 20–80, color de la paleta, forma
+  círculo/squircle/rombo, grosor de borde y opacidad del relleno).
+- **Animación de clic**: una onda marca cada pulsación (izquierda y derecha)
+  en la pantalla del cursor. Requiere alguna función de cursor activa —
+  es el escenario de sus ventanas.
 - **Foco (spotlight)**: agujero 100–450 + atenuación 0–100%.
 - **Lupa**: contenido **EN VIVO** (~3fps, solo la pantalla del cursor, excluye ventanas propias).
   Límites: contenido DRM se ve negro; ≤320ms al cambiar de pantalla.
@@ -76,7 +89,9 @@ presentaciones, sin congelar el escritorio.
 - **Objetivo: pantalla completa o una ventana.** En modo ventana el stream
   sigue esa ventana con `SCContentFilter(desktopIndependentWindow:)` y las
   anotaciones se dibujan dentro del video (burn-in con `AnnotationRenderer`;
-  la captura de una sola ventana no contendría las capas). El track es de
+  la captura de una sola ventana no contendría las capas). El burn-in sigue
+  al documento en vivo: el auto-borrado temporizado y la edición in situ
+  del texto también quedan grabados. El track es de
   tamaño fijo (un writer vivo no redimensiona pista), pero el stream escala
   el contenido hacia arriba y abajo (`scalesToFit`, macOS 14+) y el burn-in
   lee la geometría viva de cada frame (`SCStreamFrameInfo`:
@@ -141,8 +156,13 @@ presentaciones, sin congelar el escritorio.
     bundle id `com.overmark.app`) + `build/` sacado del tracking (estaba
     comiteado por accidente, binario incluido). Chequeo de marca previo:
     sin colisión en la categoría; overmark.app libre.
+15. `3f4f648` ronda de pulido: aro con formas/borde/relleno configurables,
+    ondas de clic (izquierda y derecha, con toggle), auto-borrado
+    temporizado (desvanece 5×120 ms y remueve sin ensuciar el undo; los
+    números de paso jamás se desvanecen) y edición in situ del texto con
+    la herramienta Texto.
 
-`swift build` limpio · `swift test` verde: **79** pruebas Swift Testing (13 suites) +
+`swift build` limpio · `swift test` verde: **85** pruebas Swift Testing (14 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
