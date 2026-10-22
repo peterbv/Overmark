@@ -175,6 +175,14 @@ public final class OverlayController {
         // The hold-⌥ mode only makes sense while the key can be observed;
         // without it the canvases would swallow every click and the app
         // would be unusable.
+        // The ⌥ tap installs once; if it degraded because Accessibility was
+        // missing and the permission returns while the overlay is up, this is
+        // where the mode recovers (a settings change or a permission refresh
+        // reaches here).
+        if optionMonitor == nil && settings.holdOptionToDraw {
+            startOptionMonitoring()
+        }
+
         isOptionToDrawMode = settings.holdOptionToDraw && canMonitorOption
 
         for entry in entries.values {
@@ -325,6 +333,25 @@ public final class OverlayController {
             for entry in entries.values {
                 entry.canvas.cancelPendingStroke()
             }
+        }
+        refreshMouseTransparency()
+    }
+
+    /// Re-attempts the ⌥ tap after Accessibility came back.
+    ///
+    /// Called by the coordinator when the permission state refreshes while
+    /// the overlay windows are already up, so the pass-through recovers in
+    /// place instead of waiting for the next rebuild.
+    public func retryOptionMonitoring(_ settingWantsOption: Bool) {
+        guard !entries.isEmpty else { return }
+        if optionMonitor == nil {
+            // Installs when the tap can now be created; degrades again (with
+            // the canvases set to capture mode) if it still cannot.
+            startOptionMonitoring()
+        }
+        isOptionToDrawMode = settingWantsOption && canMonitorOption
+        for entry in entries.values {
+            entry.canvas.holdOptionToDraw = isOptionToDrawMode
         }
         refreshMouseTransparency()
     }

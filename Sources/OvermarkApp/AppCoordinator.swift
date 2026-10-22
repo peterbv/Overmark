@@ -127,6 +127,11 @@ public final class AppCoordinator: ObservableObject {
     /// Watches the system-wide displays notification.
     private var screensObserver: (any NSObjectProtocol)?
 
+    /// Observes the distributed notification macOS posts when the
+    /// Accessibility permission list changes, so the ⌥ pass-through recovers
+    /// the moment the user re-grants it — without restarting the app.
+    private var accessibilityObserver: (any NSObjectProtocol)?
+
     private let captureService: ScreenCaptureService
     private let overlay: OverlayController
     private let effectController: CursorEffectController
@@ -206,6 +211,20 @@ public final class AppCoordinator: ObservableObject {
         }
 
         updateClickMonitor()
+
+        // Accessibility changes are announced system-wide ("Accesibilidad"
+        // pane in System Settings toggles the app in or out). Reacting here
+        // makes the degraded "capture mode" chip disappear and the ⌥
+        // pass-through come back live the moment the user re-grants.
+        accessibilityObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.accessibility.api"),
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshPermissions()
+            }
+        }
 
         overlay.bind(
             onAnnotationCreated: { [weak self] annotation in
@@ -287,6 +306,10 @@ public final class AppCoordinator: ObservableObject {
             NotificationCenter.default.removeObserver(screensObserver)
         }
         screensObserver = nil
+        if let accessibilityObserver {
+            DistributedNotificationCenter.default().removeObserver(accessibilityObserver)
+        }
+        accessibilityObserver = nil
         mode = .idle
         // A recording still being finalized keeps running on its own task;
         // `applicationWillTerminate` awaits it via `quit(afterStopping:)`.
@@ -341,6 +364,9 @@ public final class AppCoordinator: ObservableObject {
     private func applyPermissionSideEffects() {
         if permissions.accessibility.isGranted {
             cursorTracker.start()
+            // With the permission back, the ⌥ tap can now be created; the
+            // overlay recovers its pass-through without a rebuild.
+            overlay.retryOptionMonitoring(settings.holdOptionToDraw)
         } else {
             cursorTracker.stop()
         }
