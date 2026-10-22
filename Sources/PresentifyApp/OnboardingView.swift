@@ -21,7 +21,7 @@ struct OnboardingView: View {
             }
 
             VStack(spacing: 12) {
-                ForEach(PermissionKind.allCases) { kind in
+                ForEach(PermissionKind.required) { kind in
                     PermissionRow(
                         kind: kind,
                         status: status(for: kind),
@@ -60,6 +60,7 @@ struct OnboardingView: View {
         switch kind {
         case .screenRecording: coordinator.permissions.screenRecording
         case .accessibility: coordinator.permissions.accessibility
+        case .microphone: coordinator.microphonePermission
         }
     }
 
@@ -136,6 +137,7 @@ private struct PermissionRow: View {
         switch kind {
         case .screenRecording: "rectangle.on.rectangle"
         case .accessibility: "figure.pointer"
+        case .microphone: "mic"
         }
     }
 

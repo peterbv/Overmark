@@ -18,6 +18,11 @@ public final class OverlayController {
 
     private var entries: [CGDirectDisplayID: PanelEntry] = [:]
 
+    /// The display filter of the current build: `nil` overlays every
+    /// attached screen, a non-empty set overlays only those displays —
+    /// the annotation-scope choice resolved to concrete ids.
+    private var allowedDisplayIDs: Set<CGDirectDisplayID>?
+
     /// Whether a build of the overlays is currently running.
     private var isBuilding = false
     /// Whether another overlay build was requested while one was running.
@@ -59,7 +64,12 @@ public final class OverlayController {
     /// Displaying a captured screenshot here layered a *still image* over
     /// the real screen (and over the annotations themselves), which made
     /// an otherwise healthy session look frozen.
-    public func showOverlays() async {
+    public func showOverlays(allowedDisplayIDs: Set<CGDirectDisplayID>? = nil) async {
+        // First store the filter: a build request that arrives while this
+        // one is building (and is chained after it) must run with the
+        // newest scope, not the one that happened to be passed earlier.
+        self.allowedDisplayIDs = allowedDisplayIDs
+
         // Two overlapping builds would interleave their `await`s and leave
         // orphaned panels on screen. Serialize: the latest request wins and
         // is chained after the running build instead of racing it.
@@ -89,6 +99,10 @@ public final class OverlayController {
         let screens = NSScreen.screens.compactMap { screen -> ScreenIdentity? in
             guard let displayID = ScreenIdentity.displayID(of: screen) else {
                 Self.probeLog("no displayID in deviceDescription for '\(screen.localizedName)'")
+                return nil
+            }
+            if let allowed = allowedDisplayIDs, !allowed.contains(displayID) {
+                Self.probeLog("screen '\(screen.localizedName)' is out of the annotation scope; skipped")
                 return nil
             }
             return ScreenIdentity(displayID: displayID, screen: screen)

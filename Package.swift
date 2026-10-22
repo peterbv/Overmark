@@ -18,6 +18,10 @@ let package = Package(
         // MARK: - Platform services
         .target(name: "PresentifyCapture", dependencies: ["PresentifyCore"]),
         .target(
+            name: "PresentifyRecorder",
+            dependencies: ["PresentifyCore", "PresentifyCapture"]
+        ),
+        .target(
             name: "PresentifyHotkeys",
             dependencies: [
                 "PresentifyCore",
@@ -39,6 +43,7 @@ let package = Package(
                 "PresentifyOverlay",
                 "PresentifyHotkeys",
                 "PresentifyCursor",
+                "PresentifyRecorder",
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
@@ -48,6 +53,10 @@ let package = Package(
         .testTarget(
             name: "PresentifyCaptureTests",
             dependencies: ["PresentifyCapture"]
+        ),
+        .testTarget(
+            name: "PresentifyRecorderTests",
+            dependencies: ["PresentifyRecorder"]
         ),
         .testTarget(
             name: "PresentifyHotkeysTests",

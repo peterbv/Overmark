@@ -10,14 +10,26 @@ public enum PermissionKind: String, Hashable, Sendable, Codable, CaseIterable, I
     case screenRecording
     /// Required to observe global mouse/keyboard events (Accessibility).
     case accessibility
+    /// Required to mix the presenter's voice into a recording. Optional: the
+    /// app annotates fine without it, so it is only requested when the user
+    /// turns the microphone on for a recording.
+    case microphone
 
     public var id: String { rawValue }
+
+    /// The permissions the app fundamentally needs. The microphone is
+    /// deliberately left out: it is an optional permission, only requested
+    /// when the user turns recording audio on.
+    public static var required: [PermissionKind] {
+        [.screenRecording, .accessibility]
+    }
 
     /// A short title for the onboarding UI.
     public var title: String {
         switch self {
         case .screenRecording: "Screen Recording"
         case .accessibility: "Accessibility"
+        case .microphone: "Microphone"
         }
     }
 
@@ -31,6 +43,8 @@ public enum PermissionKind: String, Hashable, Sendable, Codable, CaseIterable, I
             "Presentify needs to see the screen so it can draw annotations on top of whatever you are showing."
         case .accessibility:
             "Presentify needs this to track your pointer and notice keyboard shortcuts while you are in other apps."
+        case .microphone:
+            "Presentify needs your microphone to record its sound along with the presentation video."
         }
     }
 
@@ -39,6 +53,7 @@ public enum PermissionKind: String, Hashable, Sendable, Codable, CaseIterable, I
         switch self {
         case .screenRecording: "Screen Recording"
         case .accessibility: "Accessibility"
+        case .microphone: "Microphone"
         }
     }
 }

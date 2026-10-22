@@ -159,6 +159,14 @@ public actor ScreenCaptureService {
     /// scale of 1 on the wrong match, which would capture non-Retina
     /// resolution. The matched screen supplies the AppKit-space frame the
     /// rest of the app reasons in, plus the backing scale factor.
+    ///
+    /// Public because the recorder (`PresentifyRecorder`) computes its
+    /// stream geometry through the same helper, so screenshots and captures
+    /// never drift apart.
+    public nonisolated static func geometry(for display: SCDisplay) -> DisplayInfo {
+        describe(display)
+    }
+
     private static func describe(_ display: SCDisplay) -> DisplayInfo {
         let screen = NSScreen.screens.first { candidate in
             (candidate.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?

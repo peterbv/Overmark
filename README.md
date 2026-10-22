@@ -66,16 +66,18 @@ security find-identity -v -p codesigning
 
 ## Granting the permissions
 
-Presentify needs two permissions, both of which macOS grants per app:
+Presentify needs two permissions up front, plus an optional third one for
+recording with sound. All of which macOS grants per app:
 
 | Permission | Why |
 | --- | --- |
-| **Screen Recording** | Reads the screen so annotations can be drawn on top of it. |
+| **Screen Recording** | Reads the screen so annotations can be drawn on top of it, and records/captures it. |
 | **Accessibility** | Tracks the pointer globally and observes global hotkeys while another app is frontmost. |
+| **Microphone** *(optional)* | Records your voice into a presentation video when "Record the microphone" is on. Asked only the first time the toggle is used. |
 
-On first launch the app shows an onboarding window that explains both and
-links straight to the right System Settings pane. If you skipped it, open
-**Presentify → Permissions** from the menu bar.
+On first launch the app shows an onboarding window that explains the two
+required ones and links straight to the right System Settings pane. If you
+skipped it, open **Presentify → Permissions** from the menu bar.
 
 To grant them manually:
 
@@ -87,6 +89,30 @@ To grant them manually:
 
 > Granting these to the app means the permissions survive reinstalling and are
 > never inherited by the terminal you happen to be using.
+
+## Recording a presentation
+
+Start annotating (⌘⇧A), then hit the red record button in the control bar
+or press **⌘⇧R**:
+
+| | |
+| --- | --- |
+| Output | One `.mov` per session — "Presentify 2026-10-22 10-30-00.mov" — in `~/Movies/Presentify` (folder changeable in **Presentify → General**). |
+| Encoding | H.264 or HEVC, 30 or 60 fps — **Presentify → General → Recording**. |
+| Microphone | Off by default; the toggle in **General → Recording** asks for the permission the first time. If access is off, Presentify records without sound and says so. |
+| Target | **Presentify → General → Recording target** — the whole display or one window. |
+| What ends up on tape | Display mode: the whole chosen display — annotations, cursor effects and everything else on that screen (Presentify's own chrome is excluded). Window mode: just that window, with your annotations drawn into the video as it records. |
+| Which screen | **Presentify → General → Recording screen** — the main display or any attached screen by name. |
+
+Ending the session (ESC, "Done" or quitting Presentify) always finalizes the
+file — a recording is never left half-written. If the recording screen could
+not deliver frames (or the run came out empty), the menu-bar app tells you
+instead of silently succeeding.
+
+In window mode the video track is sized when recording starts: resizing the
+window afterwards letterboxes the picture instead of changing the video's
+dimensions, and dedicated cursor effects (spotlight, blur, laser) are not
+baked into the frame — annotations are.
 
 ## Troubleshooting
 
@@ -143,6 +169,7 @@ Sources/PresentifyCapture/    Screen capture via ScreenCaptureKit
 Sources/PresentifyCursor/     Global pointer tracking and cursor effects
 Sources/PresentifyOverlay/    The annotation canvas and its windows
 Sources/PresentifyHotkeys/    Global hotkey registration
+Sources/PresentifyRecorder/   The presentation recorder: SCStream (display or window) + microphone → MOV
 Sources/PresentifyApp/        The SwiftUI app, menu bar and onboarding
 ```
 

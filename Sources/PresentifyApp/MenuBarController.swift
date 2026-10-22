@@ -15,6 +15,8 @@ public final class MenuBarController {
     /// The actions the menu offers, forwarded to the app.
     public var onToggleAnnotation: (() -> Void)?
     public var onTogglePause: (() -> Void)?
+    public var onToggleRecording: (() -> Void)?
+    public var onSelectPresentationScope: ((PresentationScope) -> Void)?
     public var onUndo: (() -> Void)?
     public var onRedo: (() -> Void)?
     public var onCopyScreenshot: (() -> Void)?
@@ -41,17 +43,47 @@ public final class MenuBarController {
     ///
     /// - Parameters:
     ///   - mode: The current app mode.
+    ///   - isRecording: Whether a presentation recording is active; it turns
+    ///     the menu-bar badge red and offers the stop entry.
+    ///   - scope: Which screens the annotation overlay currently covers; the
+    ///     annotation-screen entry shows it with a checkmark.
+    ///   - screenNames: The attached screens, for the annotation submenu.
     ///   - canUndo: Whether an undo step is available.
     ///   - canRedo: Whether a redo step is available.
-    public func update(mode: AppMode, canUndo: Bool, canRedo: Bool) {
-        let menu = buildMenu(mode: mode, canUndo: canUndo, canRedo: canRedo)
+    public func update(
+        mode: AppMode,
+        isRecording: Bool = false,
+        scope: PresentationScope = .all,
+        screenNames: [String] = [],
+        canUndo: Bool,
+        canRedo: Bool
+    ) {
+        applyRecordingBadge(isRecording)
+        let menu = buildMenu(
+            mode: mode,
+            isRecording: isRecording,
+            scope: scope,
+            screenNames: screenNames,
+            canUndo: canUndo,
+            canRedo: canRedo
+        )
         statusItem.menu = menu
+    }
+
+    /// Tints the status icon red while a recording runs, so the presenter
+    /// sees the state even from the menu bar alone.
+    private func applyRecordingBadge(_ isRecording: Bool) {
+        guard let button = statusItem.button else { return }
+        button.contentTintColor = isRecording ? NSColor.systemRed : nil
     }
 
     // MARK: - Private
 
     private func buildMenu(
         mode: AppMode = .idle,
+        isRecording: Bool = false,
+        scope: PresentationScope = .all,
+        screenNames: [String] = [],
         canUndo: Bool = false,
         canRedo: Bool = false
     ) -> NSMenu {
@@ -73,6 +105,42 @@ public final class MenuBarController {
             )
             pause.target = self
             menu.addItem(pause)
+
+            let record = NSMenuItem(
+                title: isRecording ? L10n.tr("Stop Recording") : L10n.tr("Record the presentation"),
+                action: #selector(handleToggleRecording),
+                keyEquivalent: ""
+            )
+            record.target = self
+            menu.addItem(record)
+
+            let scopeItem = NSMenuItem(
+                title: L10n.tr("Annotation screen"),
+                action: nil,
+                keyEquivalent: ""
+            )
+            let scopeMenu = NSMenu(title: L10n.tr("Annotation screen"))
+            let allScreens = NSMenuItem(
+                title: L10n.tr("All screens"),
+                action: #selector(handleScopeAll),
+                keyEquivalent: ""
+            )
+            allScreens.target = self
+            allScreens.state = scope.screenName == nil ? .on : .off
+            scopeMenu.addItem(allScreens)
+            for name in screenNames {
+                let item = NSMenuItem(
+                    title: name,
+                    action: #selector(handleScopeNamed(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = name
+                item.state = name == scope.screenName ? .on : .off
+                scopeMenu.addItem(item)
+            }
+            scopeItem.submenu = scopeMenu
+            menu.addItem(scopeItem)
         }
 
         menu.addItem(.separator())
@@ -132,6 +200,19 @@ public final class MenuBarController {
 
     @objc private func handleTogglePause() {
         onTogglePause?()
+    }
+
+    @objc private func handleToggleRecording() {
+        onToggleRecording?()
+    }
+
+    @objc private func handleScopeAll() {
+        onSelectPresentationScope?(.all)
+    }
+
+    @objc private func handleScopeNamed(_ sender: NSMenuItem) {
+        guard let name = sender.representedObject as? String, !name.isEmpty else { return }
+        onSelectPresentationScope?(.onlyScreen(name))
     }
 
     @objc private func handleUndo() {

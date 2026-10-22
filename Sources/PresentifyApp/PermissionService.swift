@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Foundation
 import PresentifyCapture
 import PresentifyCore
@@ -13,6 +14,10 @@ import PresentifyCursor
 public final class PermissionService: ObservableObject {
     /// The current permission state, published so SwiftUI can react to changes.
     @Published public private(set) var state: PermissionState = PermissionState()
+    /// The microphone permission, kept apart from `state` because it is an
+    /// optional permission: the core `PermissionState` only tracks what the
+    /// app fundamentally needs (screen, accessibility).
+    @Published public private(set) var microphone: PermissionStatus = .notDetermined
 
     private let captureService: ScreenCaptureService
     private let cursorTracker: CursorTracker
@@ -40,10 +45,25 @@ public final class PermissionService: ObservableObject {
                 ? .granted
                 : (defaults.bool(forKey: Self.hasPromptedAccessibility) ? .denied : .notDetermined)
         )
+        microphone = Self.microphoneStatus()
     }
 
     private static let hasPromptedScreenRecording = "Presentify.hasPromptedScreenRecording"
     private static let hasPromptedAccessibility = "Presentify.hasPromptedAccessibility"
+    private static let hasPromptedMicrophone = "Presentify.hasPromptedMicrophone"
+
+    /// Calls the system for the microphone permission; the app layer keeps
+    /// it apart from the two *required* permissions because a user who never
+    /// records audio should never be nagged about it.
+    static func microphoneStatus() -> PermissionStatus {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: .granted
+        case .notDetermined:
+            UserDefaults.standard.bool(forKey: hasPromptedMicrophone) ? .denied : .notDetermined
+        case .denied, .restricted: .denied
+        @unknown default: .notDetermined
+        }
+    }
 
     /// Requests a permission, prompting the system dialog if needed.
     ///
@@ -68,6 +88,16 @@ public final class PermissionService: ObservableObject {
             if !granted {
                 granted = CursorTracker.hasAccessibilityPermission()
             }
+        case .microphone:
+            UserDefaults.standard.set(true, forKey: Self.hasPromptedMicrophone)
+            granted = await withCheckedContinuation { continuation in
+                AVCaptureDevice.requestAccess(for: .audio) { allowed in
+                    continuation.resume(returning: allowed)
+                }
+            }
+            if !granted {
+                granted = Self.microphoneStatus().isGranted
+            }
         }
 
         refresh()
@@ -82,6 +112,8 @@ public final class PermissionService: ObservableObject {
             anchor = "Privacy_ScreenCapture"
         case .accessibility:
             anchor = "Privacy_Accessibility"
+        case .microphone:
+            anchor = "Privacy_Microphone"
         }
 
         if let url = URL(

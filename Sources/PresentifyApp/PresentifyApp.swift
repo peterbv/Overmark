@@ -50,6 +50,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator.onShowAppSettings = { [weak self] in
             self?.openSettings()
         }
+        // The settings and onboarding windows belong to the delegate, so it
+        // is the one that knows which window numbers must stay off tape.
+        coordinator.onRecordingExcludedWindows = { [weak self] in
+            var numbers: [Int] = []
+            if let number = self?.settingsWindow?.windowNumber {
+                numbers.append(number)
+            }
+            return numbers
+        }
 
         // The overlay and the document change in response to hot keys and to
         // the user's drawing, so the menu is refreshed whenever they change.
@@ -176,14 +185,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.onShowSettings = { [weak self] in
             self?.openSettings()
         }
-        menuBar.onQuit = {
-            NSApp.terminate(nil)
+        menuBar.onToggleRecording = { [weak self] in
+            self?.coordinator.toggleRecording()
+        }
+        menuBar.onSelectPresentationScope = { [weak self] scope in
+            self?.coordinator.setPresentationScope(scope)
+        }
+        menuBar.onQuit = { [weak self] in
+            self?.coordinator.quitPresentify()
         }
     }
 
     private func refreshMenu() {
         menuBar?.update(
             mode: coordinator.mode,
+            isRecording: coordinator.recordingState.isActive,
+            scope: coordinator.presentationScope,
+            screenNames: coordinator.screenNames,
             canUndo: coordinator.document.canUndo,
             canRedo: coordinator.document.canRedo
         )

@@ -1,6 +1,6 @@
 # Presentify — Estado del proyecto
 
-_Fecha: 2026-10-21 · Rama `main` · Estado: **FUNCIONAL** ✅_
+_Fecha: 2026-10-22 · Rama `main` · Estado: **FUNCIONAL** ✅_
 
 App de anotación en pantalla para macOS (barra de menú, modo accesorio), Swift Package
 (swift-tools 6.0, macOS 14+), sin sandbox. Creada para anotar **encima de vivo** durante
@@ -19,10 +19,19 @@ presentaciones, sin congelar el escritorio.
   (Dock, Finder, apps…). Mantené **⌥** para dibujar. Se puede cambiar a modo
   "captura todo" en Preferencias → Herramientas. Si falta Accesibilidad, la barra
   muestra un chip ámbar **"modo de captura"** que abre los Ajustes al tocarlo.
+- **Alcance de la anotación**: la barra tiene un selector de pantallas —
+  "Todas las pantallas" o solo una (útil con un proyector espejado: anotás en
+  la copia limpia). Se persiste y el cambio aplica en caliente. Si conectás o
+  desconectás pantallas en plena sesión, los lienzos se reconstruyen solos y
+  las anotaciones sobreviven (aviso discreto + barra re-acomodada).
 
 ### Barra flotante
 - 7 herramientas (lápiz, resaltador, flecha, rectángulo, elipse, texto, número de paso),
-  paleta + grosor, deshacer/rehacer/limpiar, 3 efectos, pausa, engranaje, "Listo".
+  paleta + grosor, deshacer/rehacer/limpiar, 3 efectos, selector de pantallas,
+  botón de grabación (rojo con cronómetro mientras graba; "terminando" deshabilitado;
+  chip verde "Grabación guardada" que abre Finder al terminar), pausa, engranaje, "Listo".
+- El ítem del menú de la barra tiene la misma pantalla de anotación como submenú
+  con marcas de verificación (disponible estando en modo anotación).
 - **Arrastrable** por la moving de la parte superior y con **snap magnético a las 4 esquinas**.
 - **Auto-ocultar** (esta es la entrada): se colapsa a una pestaña al soltar el cursor,
   reaparece al pasar por encima o arrastrar la pestaña.
@@ -33,6 +42,26 @@ presentaciones, sin congelar el escritorio.
 - **Foco (spotlight)**: agujero 100–450 + atenuación 0–100%.
 - **Lupa**: contenido **EN VIVO** (~3fps, solo la pantalla del cursor, excluye ventanas propias).
   Límites: contenido DRM se ve negro; ≤320ms al cambiar de pantalla.
+
+### Grabación de la presentación
+- **⌘⇧R** o el botón rojo de la barra: graba la presentación completa con
+  `SCStream → AVAssetWriter` (.mov H.264/HEVC, 30/60 fps) en
+  `~/Movies/Presentify` (carpeta configurable en General; `"(2)"` si hay colisión).
+- Micrófono **opcional** (toggle en General → Grabación; pide el permiso recién
+  al activarlo; denegado → graba sin sonido y lo avisa).
+- **Pantalla a grabar** elegible (principal o por nombre). El módulo
+  `PresentifyRecorder` escribe todo el display menos las ventanas propias
+  (barra, cheatsheet, ajustes, editor): el resto queda en la película.
+- **Objetivo: pantalla completa o una ventana.** En modo ventana el stream
+  sigue esa ventana con `SCContentFilter(desktopIndependentWindow:)` y las
+  anotaciones se dibujan dentro del video (burn-in con `AnnotationRenderer`;
+  la captura de una sola ventana no contendría las capas). El track es de
+  tamaño fijo: redimensionar la ventana encarta la imagen (letterbox). Los
+  efectos dedicados (spotlight/desenfoque/laser) no quedan dibujados en este
+  modo — macOS 15 ofrecería `scalableScreenCaptureIfNeeded` para track
+  variable, anotado como mejora futura.
+- Salir (ESC/"Listo"/⌘Q) **finaliza siempre el archivo** — nunca queda corrupto.
+  Si la grabación se corta o sale vacía, la barra lo dice en lugar de callar.
 
 ### Extras
 - **Español por defecto**, inglés y automático; cammbio en Preferencias → General → Idioma
@@ -45,6 +74,7 @@ presentaciones, sin congelar el escritorio.
 |---|---|
 | Entrar / terminar presentación | ⌘⇧A · ESC |
 | Resaltador / Foco / Lupa | ⌘⇧F / ⌘⇧D / ⌘⇧G |
+| Grabar / detener la grabación | ⌘⇧R |
 | Pausar | ⌘⇧S |
 | Deshacer / Rehacer | ⌘⌥Z / ⌘⌥⇧Z |
 | Copiar / Guardar captura | ⌘⇧C / ⌘⌥⇧S |
@@ -74,8 +104,10 @@ presentaciones, sin congelar el escritorio.
 10. `d465d62` snap a esquinas + auto-ocultar (pestaña) + panel de atajos.
 11. `e8be354` lupa EN VIVO (~3fps) en vez de captura estática.
 
-`swift build` limpio · `swift test` **36/36** (8 suites) · espondió en cada ronda una
-sonda (PRESENTIFY_PROBE=1) que ejercita el flujo completo headless.
+`swift build` limpio · `swift test` verde: **40** pruebas Swift Testing (9 suites) +
+**16** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
+ventana incluida). Cada ronda corre una sonda (PRESENTIFY_PROBE=1) que ejercita
+el flujo completo headless.
 
 ## Cómo construir y correr
 
@@ -96,10 +128,11 @@ open build/Presentify.app
 
 - Texto: una sóla línea; los bounds guardados no coinciden exactamente con el render.
 - Sin persistencia de documentos ni borrado por clic-derecho (undo/limpiar cubre lo básico).
-- Los overlays no reaccionan en vivo a cambios de resolución/conexión de pantallas.
 - Copiar/guardar usa solo el primer display (multimonitor exporta una sola pantalla).
 - Lupa ~3fps y solo la pantalla del cursor (extra pantalla queda con snapshot de entrada).
 - Atajos fijos (no configurables por el usuario).
+- Grabación por ventana: no incluye los efectos dedicados y fija el tamaño
+  del video al arrancar (letterbox si la ventana cambia de tamaño después).
 - Escena `Settings` de SwiftUI muerta (se usa ventana propia) — código vivo pero residual.
 
 ## Si lo subimos a GitHub (checklist para cuando toque)

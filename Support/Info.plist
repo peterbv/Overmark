@@ -33,5 +33,8 @@
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Presentify does not send Apple events.</string>
+	<!-- Optional: only asked when the user enables "Record the microphone". -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Presentify needs your microphone to record its sound along with the presentation video.</string>
 </dict>
 </plist>

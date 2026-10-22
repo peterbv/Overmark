@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import PresentifyCore
 
@@ -152,8 +153,210 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            recordingSettings
         }
         .formStyle(.grouped)
+    }
+
+    // MARK: - Recording
+
+    private var recordingSettings: some View {
+        Section(L10n.tr("Recording")) {
+            Picker(L10n.tr("Recording target"), selection: $coordinator.recorderSettings.target) {
+                Text(L10n.tr("Full screen")).tag(RecordingTarget.display)
+                Text(L10n.tr("A window")).tag(RecordingTarget.window)
+            }
+            .pickerStyle(.segmented)
+
+            if coordinator.recorderSettings.target == .window {
+                Picker(L10n.tr("Recording window"), selection: recordingWindowBinding) {
+                    ForEach(coordinator.recordableWindows, id: \.self) { choice in
+                        Text("\(choice.title) — \(choice.ownerName)")
+                            .tag(RecordingWindowChoice?.some(choice))
+                    }
+
+                    if let stale = staleWindowChoice {
+                        Text("\(stale.title) — \(L10n.tr("Not available"))")
+                            .tag(RecordingWindowChoice?.some(stale))
+                    }
+                }
+
+                Text(L10n.tr("The chosen window is recorded following it; the annotations are burned into the video."))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button(L10n.tr("Refresh windows")) {
+                    Task { await coordinator.refreshRecordableWindows() }
+                }
+            }
+
+            Picker(L10n.tr("Recording screen"), selection: recordingScreenBinding) {
+                Text(L10n.tr("Main display")).tag(String?.none)
+
+                ForEach(currentScreenOptions, id: \.id) { option in
+                    Text(option.label).tag(String?.some(option.id))
+                }
+
+                if let stale = staleRecordingName {
+                    Text("\(stale) — \(L10n.tr("Not available"))")
+                        .tag(String?.some(stale))
+                }
+            }
+
+            if coordinator.recorderSettings.target == .display {
+                Text(L10n.tr("Presentify records the whole display, annotations included live."))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Picker(L10n.tr("Frame rate"), selection: $coordinator.recorderSettings.frameRate) {
+                Text("30 fps").tag(30)
+                Text("60 fps").tag(60)
+            }
+            .pickerStyle(.segmented)
+
+            Picker(
+                L10n.tr("Codec"),
+                selection: Binding(
+                    get: { coordinator.recorderSettings.codec },
+                    set: { coordinator.recorderSettings.codec = $0 }
+                )
+            ) {
+                Text("H.264").tag(RecordingCodec.h264)
+                Text("HEVC").tag(RecordingCodec.hevc)
+            }
+
+            Toggle(L10n.tr("Record the microphone"), isOn: $coordinator.recorderSettings.includesMicrophone)
+            Text(L10n.tr("While this is on, Presentify asks for the microphone permission and records its sound into the presentation video."))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if coordinator.recorderSettings.includesMicrophone,
+               !coordinator.microphonePermission.isGranted {
+                Button(L10n.tr("Open Microphone settings")) {
+                    coordinator.openSettings(for: .microphone)
+                }
+            }
+
+            LabeledContent(L10n.tr("Save folder")) {
+                HStack(spacing: 8) {
+                    Text(recordingsFolderDisplay)
+                        .font(.caption.monospaced())
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(recordingsFolderDisplay)
+
+                    Button(L10n.tr("Choose")) {
+                        coordinator.chooseRecordingsFolder()
+                    }
+
+                    if coordinator.recorderSettings.folderPath != nil {
+                        Button(L10n.tr("Use default")) {
+                            coordinator.resetRecordingsFolder()
+                        }
+                    }
+                }
+            }
+
+            if let lastRecording = coordinator.lastRecordingURL {
+                LabeledContent(L10n.tr("Last recording")) {
+                    HStack(spacing: 8) {
+                        Text(lastRecording.lastPathComponent)
+                            .font(.caption.monospaced())
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(lastRecording.path)
+
+                        Button(L10n.tr("Show in Finder")) {
+                            coordinator.revealLastRecording()
+                        }
+                    }
+                }
+            }
+        }
+        .task(id: coordinator.recorderSettings.target) {
+            // Keep the window picker fresh: it lists what is on screen at
+            // the moment the settings are open (or the target flips).
+            await coordinator.refreshRecordableWindows()
+        }
+    }
+
+    /// The window the recording follows, or `nil` for the full screen —
+    /// the persisted choice is matched against the windows on screen.
+    private var recordingWindowBinding: Binding<RecordingWindowChoice?> {
+        Binding(
+            get: { coordinator.recorderSettings.windowChoice },
+            set: { coordinator.recorderSettings.windowChoice = $0 }
+        )
+    }
+
+    /// The saved window when it is no longer on screen, so the picker can
+    /// show the stale pick instead of silently switching to nothing.
+    private var staleWindowChoice: RecordingWindowChoice? {
+        guard let choice = coordinator.recorderSettings.windowChoice else {
+            return nil
+        }
+        return coordinator.recordableWindows.contains(choice) ? nil : choice
+    }
+
+    /// The save folder as the user reads it: outside of home it is the
+    /// absolute path, inside home the leading part is the familiar `~`.
+    private var recordingsFolderDisplay: String {
+        let path = coordinator.recordingsFolderURL.path
+        let home = NSHomeDirectory()
+        if path.hasPrefix(home) {
+            return "~" + path.dropFirst(home.count)
+        }
+        return path
+    }
+
+    // MARK: - Recording screen
+
+    /// The saved display policy flattened to the picker's selection: `nil`
+    /// is the main display, a name is the picked screen.
+    private var recordingScreenBinding: Binding<String?> {
+        Binding(
+            get: {
+                switch coordinator.recorderSettings.displayChoice {
+                case .main: return nil
+                case .namedScreen(let name): return name
+                }
+            },
+            set: { newValue in
+                coordinator.recorderSettings.displayChoice =
+                    newValue.map { .namedScreen($0) } ?? .main
+            }
+        )
+    }
+
+    /// The screens that exist right now, named; identical names (two
+    /// identical monitors) gain their pixel size to stay distinguishable.
+    private var currentScreenOptions: [(id: String, label: String)] {
+        let screens = NSScreen.screens
+        return screens.map { screen in
+            let name = screen.localizedName
+            let twins = screens.filter { $0.localizedName == name }
+            guard twins.count > 1 else {
+                return (id: name, label: name)
+            }
+            let width = Int((screen.frame.width * screen.backingScaleFactor).rounded())
+            let height = Int((screen.frame.height * screen.backingScaleFactor).rounded())
+            return (id: name, label: "\(name) (\(width)×\(height))")
+        }
+    }
+
+    /// A chosen screen that no longer matches any connected screen: shown
+    /// so the user sees the state instead of the picker silently falling
+    /// back to the main display.
+    private var staleRecordingName: String? {
+        guard case .namedScreen(let name) = coordinator.recorderSettings.displayChoice else {
+            return nil
+        }
+        return NSScreen.screens.contains { $0.localizedName == name } ? nil : name
     }
 
     /// The picker label of a language. Language names are shown in their own
@@ -172,7 +375,7 @@ struct SettingsView: View {
     private var permissionSettings: some View {
         Form {
             Section(L10n.tr("Permissions")) {
-                ForEach(PermissionKind.allCases) { kind in
+                ForEach(PermissionKind.required) { kind in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.tr(kind.title))
@@ -190,6 +393,31 @@ struct SettingsView: View {
                         } else {
                             Button(L10n.tr("Grant")) {
                                 Task { await coordinator.requestPermission(kind) }
+                            }
+                        }
+                    }
+                }
+
+                // The microphone is optional, so its row only appears when
+                // the user has recording audio switched on.
+                if coordinator.recorderSettings.includesMicrophone {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tr(PermissionKind.microphone.title))
+                            Text(L10n.tr(PermissionKind.microphone.explanation))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer()
+
+                        if coordinator.microphonePermission.isGranted {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        } else {
+                            Button(L10n.tr("Grant")) {
+                                Task { await coordinator.requestPermission(.microphone) }
                             }
                         }
                     }
@@ -212,6 +440,7 @@ struct SettingsView: View {
         switch kind {
         case .screenRecording: coordinator.permissions.screenRecording
         case .accessibility: coordinator.permissions.accessibility
+        case .microphone: coordinator.microphonePermission
         }
     }
 }

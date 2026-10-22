@@ -13,7 +13,7 @@ import SwiftUI
 /// id so the bar never leaks into exported screenshots.
 @MainActor
 final class AnnotationToolbarController {
-    private static let barSize = NSSize(width: 680, height: 104)
+    private static let barSize = NSSize(width: 760, height: 104)
 
     private let coordinator: AppCoordinator
     private var panel: OverlayPanel?
@@ -62,6 +62,20 @@ final class AnnotationToolbarController {
         self.panel = panel
     }
 
+    /// The window numbers that must never appear in a recording: the bar
+    /// itself and the cheat-sheet. The recorder excludes these by id while
+    /// the annotation canvases and cursor-effect windows stay on tape.
+    func chromeWindowNumbers() -> [Int] {
+        var numbers: [Int] = []
+        if let number = panel?.windowNumber {
+            numbers.append(number)
+        }
+        if let number = shortcutsWindow?.windowNumber {
+            numbers.append(number)
+        }
+        return numbers
+    }
+
     /// Removes the bar (and the shortcut cheat-sheet).
     func hide() {
         autoCollapseTask?.cancel()
@@ -71,6 +85,34 @@ final class AnnotationToolbarController {
         panel?.contentView = nil
         panel?.close()
         panel = nil
+    }
+
+    /// The system rearranged displays: keep the bar (and any open
+    /// cheat-sheet) on a screen that still exists instead of going off
+    /// desktop with an unplugged display.
+    func handleScreensChanged() {
+        if let panel, panel.isVisible {
+            clampIntoScreens(panel)
+        }
+        if let shortcutsWindow, shortcutsWindow.isVisible {
+            clampIntoScreens(shortcutsWindow)
+        }
+    }
+
+    /// Clamps a window into the union of the current screens, leaving at
+    /// least a grabbable strip visible — the same rule the drag uses.
+    private func clampIntoScreens(_ window: NSWindow) {
+        guard !NSScreen.screens.isEmpty else { return }
+        var union = NSScreen.screens[0].frame
+        for screen in NSScreen.screens.dropFirst() {
+            union = union.union(screen.frame)
+        }
+
+        let frame = window.frame
+        var origin = frame.origin
+        origin.x = min(max(origin.x, union.minX - frame.width + 120), union.maxX - 120)
+        origin.y = min(max(origin.y, union.minY - frame.height + 80), union.maxY - 80)
+        window.setFrameOrigin(origin)
     }
 
     // MARK: Auto-hide docking
@@ -340,6 +382,16 @@ struct AnnotationToolbarView: View {
             Divider()
                 .frame(height: 22)
 
+            // Where the overlay draws: every screen or one of them.
+            ScreenScopeMenu(coordinator: coordinator)
+
+            RecordButton(
+                state: coordinator.recordingState,
+                lastRecordingURL: coordinator.lastRecordingURL,
+                action: { coordinator.toggleRecording() },
+                reveal: { coordinator.revealLastRecording() }
+            )
+
             AnnotationControlButton(
                 systemImage: coordinator.mode == .paused ? "play.fill" : "pause.fill"
             ) {
@@ -476,6 +528,183 @@ private struct EffectButton: View {
         }
         .buttonStyle(.plain)
         .help(help)
+    }
+}
+
+/// The annotation-scope picker of the control bar: one display or all of
+/// them.
+///
+/// The pill shows the active choice — "All screens" or the chosen screen's
+/// localized name — and the menu lists whatever displays are attached at
+/// that moment. `screensEpoch` is read here so displays plugged in or out
+/// mid-session refresh the list without any manual reopen.
+private struct ScreenScopeMenu: View {
+    @ObservedObject var coordinator: AppCoordinator
+
+    var body: some View {
+        Menu {
+            Button {
+                coordinator.setPresentationScope(.all)
+            } label: {
+                Label(L10n.tr("All screens"), systemImage: "rectangle.on.rectangle")
+            }
+            ForEach(coordinator.screenNames, id: \.self) { name in
+                Button {
+                    coordinator.setPresentationScope(.onlyScreen(name))
+                } label: {
+                    Label(name, systemImage: "display")
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: coordinator.presentationScope.screenName == nil
+                    ? "rectangle.on.rectangle"
+                    : "display")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .foregroundStyle(isScopedToOneScreen ? Color.white : Color.white.opacity(0.9))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 7).fill(
+                    isScopedToOneScreen
+                        ? AnyShapeStyle(Color.accentColor.opacity(0.85))
+                        : AnyShapeStyle(Color.white.opacity(0.08))
+                )
+            )
+        }
+        .menuStyle(.button)
+        .menuIndicator(.visible)
+        .fixedSize()
+        .help(L10n.tr("Choose which screens the annotation overlay covers"))
+    }
+
+    /// A single-screen annotation pipeline is a deliberate state the bar
+    /// should flag at a glance, so that tile gets the accent treatment
+    /// while "every screen" stays with the quiet default look.
+    private var isScopedToOneScreen: Bool {
+        coordinator.presentationScope.screenName != nil
+    }
+
+    /// The scope name kept in sync with the attached screens — the epoch
+    /// read only exists so SwiftUI re-renders on display changes.
+    private var title: String {
+        _ = coordinator.screensEpoch
+        if let name = coordinator.presentationScope.screenName {
+            return name
+        }
+        return L10n.tr("All screens")
+    }
+}
+
+/// The recording toggle of the control bar.
+///
+/// Idle it reads as an empty red record circle; while recording the icon
+/// flips to a stop symbol, the tile tints red and a pill counts the elapsed
+/// time so the presenter always knows the session is on tape. While the
+/// file is finishing the tile rejects clicks; once a session has banked a
+/// `.mov`, a green chip names the file and clicking it reveals the file in
+/// Finder until the next recording starts. The pills tick on `TimelineView`
+/// — no timer plumbing of their own.
+private struct RecordButton: View {
+    var state: RecordingState
+    var lastRecordingURL: URL?
+    var action: () -> Void
+    var reveal: () -> Void
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            HStack(spacing: 4) {
+                Button(action: isFinishing ? {} : action) {
+                    Image(systemName: state.isActive ? "stop.fill" : "record.circle")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(tileTint)
+                        .frame(width: 32, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(tileFill)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(isFinishing)
+                .help(tileHelp)
+
+                if case .recording(let startedAt) = state {
+                    Text(elapsed(startedAt))
+                        .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(Color.red.opacity(0.95))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.red.opacity(0.14)))
+                        .help(L10n.tr("Recording in progress"))
+                } else if isFinishing {
+                    // The writer is closing the file: nothing clickable,
+                    // just a quiet acknowledgement that work is queued.
+                    Text(L10n.tr("Finishing the recording…"))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(0.08)))
+                } else if let lastRecordingURL {
+                    Button {
+                        reveal()
+                    } label: {
+                        Text(String(
+                            format: L10n.tr("Recording saved: %@"),
+                            arguments: [lastRecordingURL.lastPathComponent]
+                        ))
+                        .font(.system(size: 10, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundStyle(Color.green.opacity(0.95))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.green.opacity(0.14)))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.tr("Click to show the file in Finder"))
+                }
+            }
+        }
+    }
+
+    private var isFinishing: Bool {
+        if case .finishing = state { return true }
+        return false
+    }
+
+    private var tileTint: SwiftUI.Color {
+        isFinishing
+            ? Color.white.opacity(0.45)
+            : state.isActive ? Color.red : Color.white
+    }
+
+    private var tileFill: AnyShapeStyle {
+        state.isActive && !isFinishing
+            ? AnyShapeStyle(Color.red.opacity(0.20))
+            : AnyShapeStyle(Color.white.opacity(0.08))
+    }
+
+    private var tileHelp: String {
+        isFinishing
+            ? L10n.tr("Finishing the recording…")
+            : state.isActive
+                ? L10n.tr("Stop recording")
+                : L10n.tr("Record the presentation")
+    }
+
+    /// Minutes:seconds since the recording started, ticking with the
+    /// surrounding `TimelineView`.
+    private func elapsed(_ startedAt: Date) -> String {
+        let interval = max(0, Date.now.timeIntervalSince(startedAt))
+        let minutes = Int(interval) / 60
+        let seconds = Int(interval) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 
@@ -683,6 +912,7 @@ struct ShortcutHelpView: View {
         (L10n.tr("Pointer highlight"), ["⌘⇧F"]),
         (L10n.tr("Spotlight"), ["⌘⇧D"]),
         (L10n.tr("Zoom lens"), ["⌘⇧G"]),
+        (L10n.tr("Record the presentation"), ["⌘⇧R"]),
         (L10n.tr("Pause"), ["⌘⇧S"]),
         (L10n.tr("Undo"), ["⌘⌥Z"]),
         (L10n.tr("Redo"), ["⌘⌥⇧Z"]),

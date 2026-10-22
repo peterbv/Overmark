@@ -52,6 +52,9 @@ public enum L10n {
         "Stop Annotating": "Terminar anotación",
         "Pause": "Pausar",
         "Resume": "Reanudar",
+        "Record the presentation": "Grabar la presentación",
+        "Stop Recording": "Detener la grabación",
+        "Annotation screen": "Pantalla de anotación",
         "Undo": "Deshacer",
         "Redo": "Rehacer",
         "Copy Screenshot": "Copiar captura",
@@ -62,6 +65,11 @@ public enum L10n {
         // Toolbar.
         "Done": "Listo",
         "Finish annotating": "Terminar la anotación",
+        "Stop recording": "Detener la grabación",
+        "Recording in progress": "Grabando",
+        "All screens": "Todas las pantallas",
+        "Choose which screens the annotation overlay covers":
+            "Elige qué pantallas cubre la capa de anotación",
         "⌥ draw": "⌥ dibujar",
         "capture mode": "modo de captura",
         "Drag here to move the toolbar": "Arrastrá acá para mover la barra",
@@ -80,6 +88,42 @@ public enum L10n {
         "Tools": "Herramientas",
         "Cursor": "Cursor",
         "Permissions": "Permisos",
+        "Recording": "Grabación",
+        "Recording target": "Objetivo de la grabación",
+        "Full screen": "Pantalla completa",
+        "A window": "Una ventana",
+        "Recording window": "Ventana a grabar",
+        "Refresh windows": "Actualizar ventanas",
+        "The chosen window is recorded following it; the annotations are burned into the video.":
+            "La ventana elegida se graba siguiéndola y las anotaciones quedan dibujadas dentro del video.",
+        "Presentify records the whole display, annotations included live.":
+            "Presentify graba la pantalla completa, con las anotaciones en vivo.",
+        "Frame rate": "Cuadros por segundo",
+        "Codec": "Códec",
+        "Recording saved: %@": "Grabación guardada: %@",
+        "Click to show the file in Finder": "Clic para mostrar el archivo en Finder",
+        "Last recording": "Última grabación",
+        "Show in Finder": "Mostrar en Finder",
+        "Finishing the recording…": "Terminando la grabación…",
+        "Record the microphone": "Grabar el micrófono",
+        "While this is on, Presentify asks for the microphone permission and records its sound into the presentation video.":
+            "Con esta opción, Presentify pide el permiso de micrófono y graba tu voz en el video de la presentación.",
+        "Open Microphone settings": "Abrir Ajustes de Micrófono",
+        "Save folder": "Carpeta de guardado",
+        "Choose": "Elegir",
+        "Use default": "Usar la predeterminada",
+        "Presentify will save presentations here.": "Presentify guardará las presentaciones aquí.",
+        "Recording screen": "Pantalla a grabar",
+        "Main display": "Pantalla principal",
+        "Not available": "no disponible",
+        "The chosen recording screen is not available; recording the main display.":
+            "La pantalla elegida para grabar no está disponible; grabando la pantalla principal.",
+        "The chosen recording window is not available; recording the full screen.":
+            "La ventana elegida para grabar no está disponible; grabando la pantalla completa.",
+        "The chosen annotation screen is not available; annotating the main display.":
+            "La pantalla elegida para anotar no está disponible; anotando la pantalla principal.",
+        "Displays changed; the annotation overlay was rebuilt.":
+            "Cambiaron las pantallas; la capa de anotación se reconstruyó.",
         "Language": "Idioma",
         "Automatic": "Automático",
         "Tool": "Herramienta",
@@ -133,10 +177,13 @@ public enum L10n {
         // Permissions.
         "Screen Recording": "Grabación de pantalla",
         "Accessibility": "Accesibilidad",
+        "Microphone": "Micrófono",
         "Presentify needs to see the screen so it can draw annotations on top of whatever you are showing.":
             "Presentify necesita ver la pantalla para dibujar anotaciones sobre lo que estés mostrando.",
         "Presentify needs this to track your pointer and notice keyboard shortcuts while you are in other apps.":
             "Presentify lo necesita para seguir tu puntero y detectar atajos de teclado mientras usas otras apps.",
+        "Presentify needs your microphone to record its sound along with the presentation video.":
+            "Presentify necesita tu micrófono para grabar el sonido junto con el video de la presentación.",
         "Granted": "Concedido",
         "Denied": "Denegado",
         "Not set up": "Sin configurar",
@@ -165,6 +212,15 @@ public enum L10n {
         // Errors.
         "Presentify needs Screen Recording access to capture the screen.":
             "Presentify necesita acceso a Grabación de pantalla para capturar la pantalla.",
+        "Presentify needs Screen Recording access to record.":
+            "Presentify necesita acceso a Grabación de pantalla para grabar.",
+        "Start a presentation first to record it.": "Iniciá una presentación primero para grabarla.",
+        "Could not start the recording:": "No se pudo iniciar la grabación:",
+        "Microphone access is off — recording without sound.":
+            "Acceso al micrófono desactivado — grabando sin sonido.",
+        "The recording ended up empty.": "La grabación terminó vacía.",
+        "The recording stopped early, but what was captured was saved:":
+            "La grabación se cortó antes de tiempo, pero lo capturado quedó guardado:",
         "No displays were available to annotate.": "No había pantallas disponibles para anotar.",
         "Reopen Presentify or check System Settings → Displays if this persists.": "Vuelve a abrir Presentify o revisa Ajustes del Sistema → Pantallas si continúa.",
         "Could not capture the screen:": "No se pudo capturar la pantalla:",

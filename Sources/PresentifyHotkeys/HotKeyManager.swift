@@ -16,6 +16,8 @@ public enum HotKeyAction: String, CaseIterable, Sendable {
     case toggleHighlight
     /// Show or hide the zoom lens.
     case toggleZoom
+    /// Start or stop the presentation recording.
+    case toggleRecording
     /// Undo the last annotation.
     case undo
     /// Redo the last undone annotation.
@@ -72,6 +74,7 @@ public final class HotKeyManager {
         .toggleSpotlight: Binding(key: .d, modifiers: [.command, .shift]),
         .toggleHighlight: Binding(key: .f, modifiers: [.command, .shift]),
         .toggleZoom: Binding(key: .g, modifiers: [.command, .shift]),
+        .toggleRecording: Binding(key: .r, modifiers: [.command, .shift]),
         .undo: Binding(key: .z, modifiers: [.command, .option]),
         .redo: Binding(key: .z, modifiers: [.command, .option, .shift]),
         .copyScreenshot: Binding(key: .c, modifiers: [.command, .shift]),

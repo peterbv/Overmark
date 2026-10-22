@@ -5,6 +5,8 @@ import PresentifyCore
 import PresentifyCursor
 import PresentifyHotkeys
 import PresentifyOverlay
+import PresentifyRecorder
+import ScreenCaptureKit
 import SwiftUI
 
 /// The object that owns the app's behaviour.
@@ -24,6 +26,9 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var document = AnnotationDocument() {
         didSet {
             overlay.setAnnotations(document.annotations)
+            // The window recorder draws whatever is on the canvas right
+            // now; keep its snapshot in step with every document change.
+            recordingAnnotations.set(document.annotations)
             syncStepNumber()
         }
     }
@@ -60,17 +65,69 @@ public final class AppCoordinator: ObservableObject {
     /// The permission state.
     @Published public private(set) var permissions: PermissionState = PermissionState()
 
+    /// The microphone permission, tracked separately because it is an
+    /// optional permission that only matters to the recorder.
+    @Published public private(set) var microphonePermission: PermissionStatus = .notDetermined
+
+    /// The recorder's configuration, edited from Preferencias and persisted.
+    @Published public var recorderSettings = RecorderSettings() {
+        didSet {
+            let clamped = recorderSettings.clamped()
+            if clamped != recorderSettings {
+                recorderSettings = clamped
+            }
+            Self.persist(recorderSettings)
+        }
+    }
+
+    /// The presentation recorder state: idle while nothing is captured.
+    @Published public private(set) var recordingState: RecordingState = .idle
+
+    /// The URL of the most recently completed recording, for "Reveal".
+    @Published public private(set) var lastRecordingURL: URL?
+
+    /// The windows the recorder can follow when the target is a window:
+    /// the titled windows of other apps on screen, by title + owner.
+    @Published public private(set) var recordableWindows: [RecordingWindowChoice] = []
+
+    /// Where the annotation overlays appear: every screen or one chosen
+    /// display (Mirrored projector screens work best annotated on only
+    /// one of them). Persisted; changes rebuild an active session live.
+    @Published public private(set) var presentationScope: PresentationScope = .all
+
+    /// Bumped whenever the system reports a screen layout change. SwiftUI
+    /// views that list the screens re-read it, so pickers pick up displays
+    /// that were connected or unplugged mid-session.
+    @Published public private(set) var screensEpoch = 0
+
+    /// Watches the system-wide displays notification.
+    private var screensObserver: (any NSObjectProtocol)?
+
     private let captureService: ScreenCaptureService
     private let overlay: OverlayController
     private let effectController: CursorEffectController
     private let hotKeys: HotKeyManager
     private let cursorTracker: CursorTracker
     private let permissionService: PermissionService
+    /// The actor running the presentation recording.
+    private let recorder = PresentationRecorder()
+    /// The annotations snapshot the window recorder burns into the frames.
+    /// The document is a value on the main actor; the recorder's callback
+    /// queue cannot touch it directly, so changes are posted to this box
+    /// and the burn-in reads the latest set under a lock.
+    private let recordingAnnotations = RecordingAnnotationBox()
+    /// The text editor window; excluded from recordings like the other chrome.
+    private var textEditorWindow: NSWindow?
     /// The floating control bar shown while annotating.
 
     /// Opens the app's settings window; wired by the app delegate, which
     /// owns that window.
     public var onShowAppSettings: (() -> Void)?
+
+    /// Extra app chrome (the settings window, the onboarding) that has to
+    /// be excluded from a recording; wired by the app delegate, which owns
+    /// those windows.
+    public var onRecordingExcludedWindows: () -> [Int] = { [] }
 
     /// The floating control bar shown while annotating.
     private var toolbar: AnnotationToolbarController?
@@ -118,6 +175,7 @@ public final class AppCoordinator: ObservableObject {
         hotKeys.registerDefaults()
         permissionService.refresh()
         permissions = permissionService.state
+        microphonePermission = permissionService.microphone
 
         // Restore the persisted language before any view is built so the
         // onboarding window and the status-bar menu come up translated.
@@ -126,6 +184,19 @@ public final class AppCoordinator: ObservableObject {
         ) ?? .spanish
         L10n.selected = L10n.resolve(stored)
         self.language = stored
+
+        recorderSettings = Self.storedRecorderSettings()
+        presentationScope = Self.storedPresentationScope()
+
+        // Display changes (plug, unplug, rearrange) must keep an active
+        // session honest: the overlays follow whatever ends up attached.
+        screensObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.handleScreensChanged() }
+        }
 
         toolbar = AnnotationToolbarController(coordinator: self)
     }
@@ -137,6 +208,7 @@ public final class AppCoordinator: ObservableObject {
     public func start() {
         permissionService.refresh()
         permissions = permissionService.state
+        microphonePermission = permissionService.microphone
 
         applyPermissionSideEffects()
     }
@@ -149,7 +221,13 @@ public final class AppCoordinator: ObservableObject {
         toolbar?.hide()
         overlay.tearDown()
         effectController.tearDown()
+        if let screensObserver {
+            NotificationCenter.default.removeObserver(screensObserver)
+        }
+        screensObserver = nil
         mode = .idle
+        // A recording still being finalized keeps running on its own task;
+        // `applicationWillTerminate` awaits it via `quit(afterStopping:)`.
     }
 
     // MARK: - Permissions
@@ -169,6 +247,7 @@ public final class AppCoordinator: ObservableObject {
     public func requestPermission(_ kind: PermissionKind) async -> Bool {
         let granted = await permissionService.request(kind)
         permissions = permissionService.state
+        microphonePermission = permissionService.microphone
         // The Accessibility prompt is answered asynchronously, so the grant
         // usually lands *after* this call returns. The pointer tap has to be
         // created at that moment, otherwise the permission reads as granted
@@ -186,6 +265,7 @@ public final class AppCoordinator: ObservableObject {
     public func refreshPermissions() {
         permissionService.refresh()
         permissions = permissionService.state
+        microphonePermission = permissionService.microphone
         applyPermissionSideEffects()
     }
 
@@ -235,6 +315,12 @@ public final class AppCoordinator: ObservableObject {
         hotKeys.unregisterEscape()
         overlay.tearDown()
         mode = .idle
+        // ESC is the guaranteed exit, and that promise extends to the
+        // recording: ending a session never loses the file — it is
+        // finalized here and announced when done.
+        if recordingState.isActive {
+            Task { await runStopRecording() }
+        }
     }
 
     /// Toggles annotation mode on or off.
@@ -261,8 +347,102 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
+    // MARK: - Presentation scope
+
+    /// Changes where the overlays annotate and persists the choice.
+    ///
+    /// While a presentation is running the change applies live: the panels
+    /// rebuild on the allowed screens and the existing annotations come
+    /// back on them, because strokes live in the document, not in windows.
+    public func setPresentationScope(_ scope: PresentationScope) {
+        guard scope != presentationScope else { return }
+        presentationScope = scope
+        Self.persistPresentationScope(scope)
+        guard mode != .idle else { return }
+        Task { await rebuildOverlaysForScope() }
+    }
+
+    /// The localized names of the attached screens, for the scope picker.
+    /// Duplicate names (two identical monitors) collapse to one entry:
+    /// picking it annotates the first matching screen.
+    public var screenNames: [String] {
+        var seen = Set<String>()
+        return NSScreen.screens.compactMap {
+            seen.insert($0.localizedName).inserted ? $0.localizedName : nil
+        }
+    }
+
+    /// Rebuilds the overlays for the current scope while presenting.
+    private func rebuildOverlaysForScope() async {
+        guard mode != .idle else { return }
+        await overlay.showOverlays(allowedDisplayIDs: allowedOverlayDisplayIDs())
+        guard overlay.overlayCount > 0 else {
+            lastError = L10n.tr("No displays were available to annotate.")
+            return
+        }
+        overlay.setAnnotations(document.annotations)
+        overlay.apply(settings: settings)
+        overlay.setInteractionEnabled(mode.allowsDrawing)
+    }
+
+    /// The concrete overlay filter of the stored scope.
+    ///
+    /// `nil` covers every screen. A single-screen scope resolves to that
+    /// display's id; when the named screen no longer exists the main one
+    /// takes over (with a notice) so the presentation is never left
+    /// without a canvas.
+    private func allowedOverlayDisplayIDs() -> Set<CGDirectDisplayID>? {
+        guard let name = presentationScope.screenName else { return nil }
+        let screens = NSScreen.screens
+        if let match = screens.first(where: { $0.localizedName == name }),
+           let displayID = Self.displayID(of: match) {
+            return [displayID]
+        }
+        lastError = L10n.tr(
+            "The chosen annotation screen is not available; annotating the main display."
+        )
+        let main = NSScreen.main ?? screens.first
+        guard let main, let displayID = Self.displayID(of: main) else { return nil }
+        return [displayID]
+    }
+
+    private static func displayID(of screen: NSScreen) -> CGDirectDisplayID? {
+        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+    }
+
+    /// The system rearranged the displays (plug, unplug, reorder).
+    ///
+    /// An active session follows the new layout: the panels rebuild on the
+    /// screens still in scope — annotations survive because they live in
+    /// the document — and the bar re-clamps onto a screen that exists.
+    /// The epoch bump lets screen pickers refresh their lists.
+    private func handleScreensChanged() {
+        screensEpoch += 1
+        guard mode != .idle else { return }
+        lastError = L10n.tr("Displays changed; the annotation overlay was rebuilt.")
+        Task { await rebuildOverlaysForScope() }
+        toolbar?.handleScreensChanged()
+    }
+
+    // MARK: - Presentation scope storage
+
+    private static let presentationScopeKey = "Presentify.presentationScope"
+
+    private static func storedPresentationScope() -> PresentationScope {
+        guard let data = UserDefaults.standard.data(forKey: presentationScopeKey),
+              let scope = try? JSONDecoder().decode(PresentationScope.self, from: data) else {
+            return .all
+        }
+        return scope
+    }
+
+    private static func persistPresentationScope(_ scope: PresentationScope) {
+        guard let data = try? JSONEncoder().encode(scope) else { return }
+        UserDefaults.standard.set(data, forKey: presentationScopeKey)
+    }
+
     /// Shows the overlays: a transparent canvas over the live desktop on
-    /// every display.
+    /// the screens the presentation scope allows.
     ///
     /// No screenshot is displayed behind the strokes. An earlier design
     /// layered a fresh capture under the annotations, but rendering it as a
@@ -271,7 +451,7 @@ public final class AppCoordinator: ObservableObject {
     /// static photo, clicks landed on apps that stayed invisibly busy, and
     /// every annotation drawn was hidden underneath it.
     private func presentOverlays() async {
-        await overlay.showOverlays()
+        await overlay.showOverlays(allowedDisplayIDs: allowedOverlayDisplayIDs())
 
         guard overlay.overlayCount > 0 else {
             // Panels can fail to build only when no screens are matched at
@@ -363,6 +543,8 @@ public final class AppCoordinator: ObservableObject {
             cursorEffects.isHighlightEnabled.toggle()
         case .toggleZoom:
             cursorEffects.isZoomEnabled.toggle()
+        case .toggleRecording:
+            toggleRecording()
         case .undo:
             undo()
         case .redo:
@@ -372,7 +554,7 @@ public final class AppCoordinator: ObservableObject {
         case .saveScreenshot:
             Task { await saveScreenshot() }
         case .quit:
-            NSApp.terminate(nil)
+            quitPresentify()
         }
     }
 
@@ -393,6 +575,7 @@ public final class AppCoordinator: ObservableObject {
             backing: .buffered,
             defer: false
         )
+        textEditorWindow = window
         window.title = L10n.tr("Add Text")
         // The coordinator holds no strong reference to this window, so it must
         // not self-release on close(): close() defers an autorelease and
@@ -441,6 +624,7 @@ public final class AppCoordinator: ObservableObject {
     /// Resumes the overlay after the text editor closes.
     private func endTextEditing() {
         overlay.setInteractionEnabled(mode.allowsDrawing)
+        textEditorWindow = nil
         textEditorDelegate = nil
     }
 
@@ -473,6 +657,301 @@ public final class AppCoordinator: ObservableObject {
             text: trimmed
         )
         document.add(annotation)
+    }
+
+    // MARK: - Recording
+
+    /// Starts or stops the presentation recording.
+    ///
+    /// Non-async entry point for toolbar buttons, menu items and the hot
+    /// key; the async work runs on the coordinator's actor context.
+    public func toggleRecording() {
+        Task { await runToggleRecording() }
+    }
+
+    /// Quits the app, finalizing a running recording first.
+    public func quitPresentify() {
+        Task {
+            if recordingState.isActive {
+                await runStopRecording()
+            }
+            NSApp.terminate(nil)
+        }
+    }
+
+    private func runToggleRecording() async {
+        if recordingState.allowsStart {
+            await startRecording()
+        } else {
+            await runStopRecording()
+        }
+    }
+
+    /// Starts the recording: sorts out permissions, gathers the window
+    /// numbers that must be excluded and kicks the capture actor.
+    public func startRecording() async {
+        guard recordingState.allowsStart else { return }
+
+        guard mode != .idle else {
+            lastError = L10n.tr("Start a presentation first to record it.")
+            return
+        }
+
+        if permissions.screenRecording.isGranted {
+            // Already granted: nothing to ask.
+        } else {
+            let granted = await requestPermission(.screenRecording)
+            guard granted else {
+                lastError = L10n.tr("Presentify needs Screen Recording access to record.")
+                return
+            }
+        }
+        permissions = permissionService.state
+
+        // The microphone was never requested → ask now. If the user has
+        // previously chosen Don't Allow, record without sound rather than
+        // refusing to record at all.
+        let includeMicrophone: Bool
+        if recorderSettings.includesMicrophone {
+            switch microphonePermission {
+            case .notDetermined:
+                _ = await requestPermission(.microphone)
+            default:
+                break
+            }
+            includeMicrophone = microphonePermission.isGranted
+            if !includeMicrophone {
+                lastError = L10n.tr("Microphone access is off — recording without sound.")
+            }
+        } else {
+            includeMicrophone = false
+        }
+
+        let windowsToExclude = Set(excludedWindowNumbers())
+        var settings = recorderSettings
+        settings.includesMicrophone = includeMicrophone
+        let (displayID, displayWarning) = resolveRecordingDisplayID()
+        let configuration = PresentationRecorder.Configuration(
+            displayID: displayID,
+            excludedWindowNumbers: windowsToExclude,
+            settings: settings,
+            destinationFolder: recordingsFolderURL,
+            windowChoice: settings.target == .window ? settings.windowChoice : nil,
+            annotationsProvider: { [recordingAnnotations] in
+                recordingAnnotations.current()
+            }
+        )
+
+        recordingState = .recording(startedAt: Date.now)
+        do {
+            let url = try await runStartRecording(with: configuration)
+            // Non-fatal notices: the recording is up, the user just should
+            // know the compromises it is running with.
+            var notices: [String] = []
+            if let displayWarning {
+                notices.append(displayWarning)
+            }
+            if !includeMicrophone, recorderSettings.includesMicrophone {
+                notices.append(L10n.tr("Microphone access is off — recording without sound."))
+            }
+            if !notices.isEmpty {
+                lastError = notices.joined(separator: " ")
+            }
+            _ = url
+        } catch {
+            recordingState = .idle
+            lastError = L10n.tr("Could not start the recording:") + " \(error.localizedDescription)"
+        }
+    }
+
+    /// Starts the recorder, falling back to the full display when the
+    /// window target cannot find its window anymore (it was closed or
+    /// retitled since it was picked).
+    private func runStartRecording(
+        with configuration: PresentationRecorder.Configuration
+    ) async throws -> URL {
+        do {
+            return try await recorder.start(configuration)
+        } catch let error as RecorderDisplayError where error == .windowGone {
+            var fallback = configuration
+            fallback.windowChoice = nil
+            lastError = L10n.tr("The chosen recording window is not available; recording the full screen.")
+            return try await recorder.start(fallback)
+        }
+    }
+
+    /// Re-lists the recordable windows for the settings pickers. Only the
+    /// titled windows of other apps are offered: an unlabeled window cannot
+    /// be re-found reliably across app launches.
+    public func refreshRecordableWindows() async {
+        guard permissions.screenRecording.isGranted else {
+            recordableWindows = []
+            return
+        }
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(
+                false,
+                onScreenWindowsOnly: true
+            )
+            let ownBundle = Bundle.main.bundleIdentifier
+            var choices: [RecordingWindowChoice] = []
+            var seen = Set<RecordingWindowChoice>()
+            for window in content.windows {
+                guard let title = window.title, !title.isEmpty,
+                      window.frame.width >= 150,
+                      window.frame.height >= 100,
+                      let owner = window.owningApplication?.applicationName,
+                      window.owningApplication?.bundleIdentifier != ownBundle else {
+                    continue
+                }
+                let choice = RecordingWindowChoice(title: title, ownerName: owner)
+                if seen.insert(choice).inserted {
+                    choices.append(choice)
+                }
+            }
+            choices.sort { first, second in
+                if first.ownerName != second.ownerName {
+                    return first.ownerName < second.ownerName
+                }
+                return first.title < second.title
+            }
+            recordableWindows = choices
+        } catch {
+            // Keep the previous list; the settings view shows the stale
+            // pick as unavailable.
+        }
+    }
+
+
+    /// Stops the recording and finalizes the file. Runs even without the
+    /// overlays up: ESC leaves the presentation, the recording still banks.
+    public func stopRecording() {
+        Task { await runStopRecording() }
+    }
+
+    private func runStopRecording() async {
+        guard recordingState.isActive else { return }
+        recordingState = .finishing
+
+        let outcome = await recorder.stop()
+        recordingState = .idle
+        lastRecordingURL = outcome.url
+
+        if let failure = outcome.streamFailure {
+            // The display went away mid-session; the prefix that was
+            // captured is complete, so it is a warning, not a loss.
+            lastError = L10n.tr("The recording stopped early, but what was captured was saved:")
+                + " \(failure.localizedDescription)"
+        } else if outcome.videoFramesAppended == 0 && outcome.audioBuffersAppended == 0 {
+            lastError = L10n.tr("The recording ended up empty.")
+        }
+    }
+
+    /// Reveals the last finished recording in Finder (the row is selected),
+    /// so the presenter can rename, share or move the `.mov` right away.
+    public func revealLastRecording() {
+        guard let url = lastRecordingURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    /// The chrome windows no recording should include.
+    private func excludedWindowNumbers() -> [Int] {
+        var numbers = onRecordingExcludedWindows()
+        if let toolbar {
+            numbers.append(contentsOf: toolbar.chromeWindowNumbers())
+        }
+        if let number = textEditorWindow?.windowNumber {
+            numbers.append(number)
+        }
+        return numbers
+    }
+
+    // MARK: - Save folder
+
+    /// Resolves the saved display policy against the screens present right
+    /// now, returning the `CGDirectDisplayID` to capture plus an optional
+    /// warning when a fallback had to happen.
+    ///
+    /// Resolution runs through `NSScreen` (which needs no permission) and
+    /// matches on the localized name the user picked. A single-screen Mac
+    /// trivially records its only display.
+    private func resolveRecordingDisplayID() -> (CGDirectDisplayID, String?) {
+        switch recorderSettings.displayChoice {
+        case .main:
+            return (CGMainDisplayID(), nil)
+        case .namedScreen(let name):
+            let screens = NSScreen.screens
+            guard screens.count > 1 else {
+                return (CGMainDisplayID(), nil)
+            }
+            if let screen = screens.first(where: { $0.localizedName == name }) {
+                if let value = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+                    return (value.uint32Value, nil)
+                }
+            }
+            // The chosen screen is unplugged or was renamed: the
+            // presentation still needs its video, so the main display
+            // steps in and the notice explains it.
+            return (
+                CGMainDisplayID(),
+                L10n.tr("The chosen recording screen is not available; recording the main display.")
+            )
+        }
+    }
+
+    /// Opens a folder picker and stores the user's pick as the recordings
+    /// destination. `runModal` keeps working from a menu-bar-only app; the
+    /// `recorderSettings` setter renormalizes and persists on its own.
+    public func chooseRecordingsFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = recordingsFolderURL
+        panel.prompt = L10n.tr("Choose")
+        panel.message = L10n.tr("Presentify will save presentations here.")
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        recorderSettings.folderPath = url.path
+    }
+
+    /// Puts recordings back into the default folder (`~/Movies/Presentify`).
+    public func resetRecordingsFolder() {
+        recorderSettings.folderPath = nil
+    }
+
+    /// The folder recordings land in: the user's choice, or the default
+    /// (`~/Movies/Presentify`). Created by the recorder on first use.
+    public var recordingsFolderURL: URL {
+        if let path = recorderSettings.folderPath {
+            return URL(fileURLWithPath: path, isDirectory: true)
+        }
+        return Self.defaultRecordingsFolder()
+    }
+
+    /// Where recordings land. Created by the recorder on first use.
+    public static func defaultRecordingsFolder() -> URL {
+        let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory())
+        return movies.appendingPathComponent("Presentify", isDirectory: true)
+    }
+
+    // MARK: - Recorder settings storage
+
+    private static let recorderSettingsKey = "Presentify.recorderSettings"
+
+    private static func storedRecorderSettings() -> RecorderSettings {
+        guard let data = UserDefaults.standard.data(forKey: recorderSettingsKey),
+              let settings = try? JSONDecoder().decode(RecorderSettings.self, from: data) else {
+            return RecorderSettings()
+        }
+        return settings
+    }
+
+    private static func persist(_ settings: RecorderSettings) {
+        guard let data = try? JSONEncoder().encode(settings) else { return }
+        UserDefaults.standard.set(data, forKey: recorderSettingsKey)
     }
 
     /// Copies a fresh screenshot of the screen to the clipboard.
@@ -510,5 +989,29 @@ public final class AppCoordinator: ObservableObject {
 
         CGImageDestinationAddImage(destination, image, nil)
         CGImageDestinationFinalize(destination)
+    }
+}
+
+/// A tiny lock-protected snapshot of the annotations the window recorder
+/// burns into the frames.
+///
+/// The document lives on the main actor; the recorder's callback queue fires
+/// at 30–60 fps and cannot touch it. Every document change posts its
+/// annotations here, and the burn-in reads the latest set per frame — the
+/// presentation keeps drawing while the recording runs.
+private final class RecordingAnnotationBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var annotations: [Annotation] = []
+
+    func set(_ annotations: [Annotation]) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.annotations = annotations
+    }
+
+    func current() -> [Annotation] {
+        lock.lock()
+        defer { lock.unlock() }
+        return annotations
     }
 }
