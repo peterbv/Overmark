@@ -187,11 +187,31 @@ public final class CursorEffectController {
         }
     }
 
+    /// Starts the click ripple on the display hosting the click.
+    ///
+    /// The ripple is drawn by the cursor-effect windows, so it only plays
+    /// while at least one effect window is up (any of the three toggles
+    /// turned on): with everything off there are no windows to draw on.
+    /// Right clicks play a slightly different ripple, which the view styles.
+    public func triggerClick(point: Point, isRight: Bool) {
+        guard effects.isClickAnimationEnabled, !entries.isEmpty else { return }
+        for entry in entries.values
+        where entry.view.screen.frame.contains(point) {
+            entry.view.clickPulse = ClickPulse(
+                point: point,
+                button: isRight ? .right : .left
+            )
+        }
+    }
+
     /// Removes the effect windows.
     public func tearDown() {
         backgroundRefreshTask?.cancel()
         backgroundRefreshTask = nil
         for entry in entries.values {
+            // A beating click pulse keeps a 60 fps ticker on an orphaned
+            // view; clearing it stops the ticker before the window dies.
+            entry.view.clickPulse = nil
             entry.window.orderOut(nil)
             entry.window.close()
         }

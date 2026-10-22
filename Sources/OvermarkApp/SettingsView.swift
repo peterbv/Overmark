@@ -68,6 +68,38 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
 
+            Section(L10n.tr("Auto-erase")) {
+                Toggle(
+                    L10n.tr("Fade drawings away on their own"),
+                    isOn: Binding(
+                        get: { coordinator.settings.autoFadeSeconds > 0 },
+                        set: { coordinator.settings.autoFadeSeconds = $0 ? 10 : 0 }
+                    )
+                )
+
+                if coordinator.settings.autoFadeSeconds > 0 {
+                    Slider(
+                        value: Binding(
+                            get: { Double(coordinator.settings.autoFadeSeconds) },
+                            set: { coordinator.settings.autoFadeSeconds = Int($0) }
+                        ),
+                        in: 3...60,
+                        step: 1
+                    ) {
+                        Text(L10n.tr("Fade delay"))
+                    } minimumValueLabel: {
+                        Text("3s")
+                    } maximumValueLabel: {
+                        Text("60s")
+                    }
+
+                    Text(L10n.tr("Drawings disappear on their own after this long. Step numbers never fade."))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             Section(L10n.tr("Colour")) {
                 ColorPalette(selection: $coordinator.settings.color)
             }
@@ -98,6 +130,40 @@ struct SettingsView: View {
                     Text(L10n.tr("Ring colour"))
                     ColorPalette(selection: $coordinator.cursorEffects.highlightColor)
                 }
+
+                Picker(L10n.tr("Ring shape"), selection: $coordinator.cursorEffects.highlightShape) {
+                    ForEach(HighlightShape.allCases) { shape in
+                        Text(shape.displayName).tag(shape)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Slider(value: $coordinator.cursorEffects.highlightBorderWidth, in: 1...12, step: 1) {
+                    Text(L10n.tr("Border width"))
+                } minimumValueLabel: {
+                    Text("1")
+                } maximumValueLabel: {
+                    Text("12")
+                }
+
+                Slider(value: $coordinator.cursorEffects.highlightFillOpacity, in: 0...0.8, step: 0.05) {
+                    Text(L10n.tr("Fill opacity"))
+                } minimumValueLabel: {
+                    Text("0%")
+                } maximumValueLabel: {
+                    Text("80%")
+                }
+            }
+
+            Section(L10n.tr("Click animation")) {
+                Toggle(
+                    L10n.tr("Show click ripples"),
+                    isOn: $coordinator.cursorEffects.isClickAnimationEnabled
+                )
+                Text(L10n.tr("Ripples play while the cursor effect windows are up — turn any effect on to see them."))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Section(L10n.tr("Spotlight")) {
@@ -502,6 +568,17 @@ extension ZoomShape {
         switch self {
         case .circle: L10n.tr("Circle")
         case .squircle: L10n.tr("Squircle")
+        }
+    }
+}
+
+extension HighlightShape {
+    /// The name shown in the ring shape picker, in the active language.
+    @MainActor var displayName: String {
+        switch self {
+        case .circle: L10n.tr("Circle")
+        case .squircle: L10n.tr("Squircle")
+        case .rhombus: L10n.tr("Rhombus")
         }
     }
 }

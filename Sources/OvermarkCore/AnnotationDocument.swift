@@ -47,19 +47,37 @@ public struct AnnotationDocument: Hashable, Sendable, Codable {
     }
 
     /// Removes the annotation with the given id, if present.
+    ///
+    /// `recordHistory: false` is for stateless removals — the auto-erase
+    /// timer takes drawings away on its own, which is not a user action and
+    /// should not be undoable.
     @discardableResult
-    public mutating func remove(id: Annotation.ID) -> Annotation? {
+    public mutating func remove(
+        id: Annotation.ID,
+        recordHistory shouldRecord: Bool = true
+    ) -> Annotation? {
         guard let index = annotations.firstIndex(where: { $0.id == id }) else {
             return nil
         }
-        recordHistory()
+        if shouldRecord {
+            recordHistory()
+        }
         return annotations.remove(at: index)
     }
 
     /// Replaces the annotation with the matching id.
-    public mutating func update(_ annotation: Annotation) {
+    ///
+    /// `recordHistory: false` is for animated, stateless changes: the
+    /// auto-erase fade pushes a handful of opacity nudges, and none of
+    /// those intermediate frames should be undoable.
+    public mutating func update(
+        _ annotation: Annotation,
+        recordHistory shouldRecord: Bool = true
+    ) {
         guard let index = annotations.firstIndex(where: { $0.id == annotation.id }) else { return }
-        recordHistory()
+        if shouldRecord {
+            recordHistory()
+        }
         annotations[index] = annotation
     }
 

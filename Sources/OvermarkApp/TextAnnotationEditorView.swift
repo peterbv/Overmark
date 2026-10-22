@@ -8,19 +8,37 @@ import OvermarkCore
 ///
 /// Text can span several lines: Return inserts a newline and ⌘Return commits,
 /// so the panel can be driven from the keyboard without losing multi-line
-/// input.
+/// input. Pass `initialText` to reopen it over an existing annotation — the
+/// button turns into a save action for that case.
 struct TextAnnotationEditorView: View {
     /// The colour the annotation will use.
     let color: AnnotationColor
     /// The stroke width the annotation will use.
     let lineWidth: Double
+    /// Text to prefill the editor with (an existing annotation's text).
+    let initialText: String
     /// Called when the user dismisses the editor without adding text.
     let onCancel: () -> Void
     /// Called with the typed text when the user confirms.
     let onCommit: (String) -> Void
 
-    @State private var text: String = ""
+    @State private var text: String
     @FocusState private var isFocused: Bool
+
+    init(
+        color: AnnotationColor,
+        lineWidth: Double,
+        initialText: String = "",
+        onCancel: @escaping () -> Void,
+        onCommit: @escaping (String) -> Void
+    ) {
+        self.color = color
+        self.lineWidth = lineWidth
+        self.initialText = initialText
+        self.onCancel = onCancel
+        self.onCommit = onCommit
+        _text = State(initialValue: initialText)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -64,10 +82,13 @@ struct TextAnnotationEditorView: View {
                 Button(L10n.tr("Cancel"), action: onCancel)
                     .keyboardShortcut(.cancelAction)
 
-                Button(L10n.tr("Add"), action: commit)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(
+                    initialText.isEmpty ? L10n.tr("Add") : L10n.tr("Save"),
+                    action: commit
+                )
+                .keyboardShortcut(.return, modifiers: .command)
+                .buttonStyle(.borderedProminent)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(16)

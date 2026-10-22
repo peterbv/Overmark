@@ -44,7 +44,10 @@ public final class AppCoordinator: ObservableObject {
     /// change genuinely needs one (see `CursorEffectController.apply`),
     /// which keeps the spotlight/zoom controls smooth while they change.
     @Published public var cursorEffects = CursorEffects() {
-        didSet { Task { await effectController.apply(effects: cursorEffects) } }
+        didSet {
+            updateClickMonitor()
+            Task { await effectController.apply(effects: cursorEffects) }
+        }
     }
 
     /// The most recent error message, shown in the UI.
@@ -143,6 +146,16 @@ public final class AppCoordinator: ObservableObject {
     /// somewhere for as long as the editor is open.
     private var textEditorDelegate: TextEditorWindowDelegate?
 
+    /// Monitors that play the click ripple (global + local).
+    ///
+    /// A global monitor never sees events aimed at this app's own windows:
+    /// while Overmark is frontmost — its editor windows, or its panels when
+    /// they have claimed the mouse — clicks arrive locally instead. Both are
+    /// installed while the ripple is on, and `NSEvent.mouseLocation` gives a
+    /// screen-space position for either kind.
+    private var globalClickMonitor: Any?
+    private var localClickMonitor: Any?
+
     public init() {
         let captureService = ScreenCaptureService()
         let cursorTracker = CursorTracker()
@@ -168,15 +181,22 @@ public final class AppCoordinator: ObservableObject {
             self?.effectController.updateCursorLocation(point)
         }
 
+        updateClickMonitor()
+
         overlay.bind(
             onAnnotationCreated: { [weak self] annotation in
                 self?.document.add(annotation)
+                self?.scheduleAutoFade(annotation)
             },
             onClick: { [weak self] point in
                 self?.handleCanvasClick(at: point)
             },
             onAnnotationDelete: { [weak self] annotation in
                 self?.document.remove(id: annotation.id)
+            },
+            onAnnotationEdit: { [weak self] annotation in
+                let anchor = annotation.path.first ?? annotation.bounds.origin
+                self?.presentTextEditor(at: anchor, editing: annotation)
             }
         )
 
@@ -232,6 +252,7 @@ public final class AppCoordinator: ObservableObject {
         toolbar?.hide()
         overlay.tearDown()
         effectController.tearDown()
+        removeClickMonitors()
         if let screensObserver {
             NotificationCenter.default.removeObserver(screensObserver)
         }
@@ -620,8 +641,63 @@ public final class AppCoordinator: ObservableObject {
         presentTextEditor(at: point)
     }
 
+    // MARK: - Click ripple
+
+    /// Installs or removes the click-ripple monitors.
+    ///
+    /// The monitors exist only while the ripple setting is on; the effect
+    /// controller ignores trigger requests whenever no effect window is
+    /// up, so switching the toggle on with every effect off stays a no-op.
+    private func updateClickMonitor() {
+        guard cursorEffects.isClickAnimationEnabled else {
+            removeClickMonitors()
+            return
+        }
+        guard globalClickMonitor == nil else { return }
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown],
+            handler: { [weak self] event in
+                Task { @MainActor in self?.playClickPulse(for: event) }
+            }
+        )
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self] event in
+            self?.playClickPulse(for: event)
+            return event
+        }
+    }
+
+    /// Forwards a click under the pointer to the effect controller.
+    private func playClickPulse(for event: NSEvent) {
+        let point = Point(
+            x: Double(NSEvent.mouseLocation.x),
+            y: Double(NSEvent.mouseLocation.y)
+        )
+        effectController.triggerClick(
+            point: point,
+            isRight: event.type == .rightMouseDown
+        )
+    }
+
+    /// Drops both click monitors.
+    private func removeClickMonitors() {
+        if let monitor = localClickMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        localClickMonitor = nil
+        if let monitor = globalClickMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        globalClickMonitor = nil
+    }
+
     /// Opens the text editor and adds the resulting annotation.
-    private func presentTextEditor(at point: Point) {
+    ///
+    /// Pass `editing` to re-edit an existing text annotation: the editor is
+    /// prefilled with its text and the commit replaces it in place (same id,
+    /// colour and stroke width), which also keeps undo a single step.
+    private func presentTextEditor(at point: Point, editing existing: Annotation? = nil) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 380, height: 180),
             styleMask: [.titled, .closable],
@@ -629,7 +705,7 @@ public final class AppCoordinator: ObservableObject {
             defer: false
         )
         textEditorWindow = window
-        window.title = L10n.tr("Add Text")
+        window.title = L10n.tr(existing == nil ? "Add Text" : "Edit Text")
         // The coordinator holds no strong reference to this window, so it must
         // not self-release on close(): close() defers an autorelease and
         // popping that pool after the last strong reference goes away would
@@ -656,8 +732,9 @@ public final class AppCoordinator: ObservableObject {
 
         window.contentView = NSHostingView(
             rootView: TextAnnotationEditorView(
-                color: settings.color,
-                lineWidth: settings.lineWidth,
+                color: existing?.color ?? settings.color,
+                lineWidth: existing?.lineWidth ?? settings.lineWidth,
+                initialText: existing?.text ?? "",
                 onCancel: { [weak self] in
                     window.close()
                     self?.endTextEditing()
@@ -665,7 +742,11 @@ public final class AppCoordinator: ObservableObject {
                 onCommit: { [weak self] text in
                     window.close()
                     self?.endTextEditing()
-                    self?.addTextAnnotation(text, at: point)
+                    if let existing {
+                        self?.updateTextAnnotation(existing, with: text)
+                    } else {
+                        self?.addTextAnnotation(text, at: point)
+                    }
                 }
             )
         )
@@ -710,6 +791,74 @@ public final class AppCoordinator: ObservableObject {
             text: trimmed
         )
         document.add(annotation)
+        scheduleAutoFade(annotation)
+    }
+
+    /// Replaces the text of an existing text annotation.
+    ///
+    /// The id, colour and stroke width are kept, so the edit is visually
+    /// continuous with what was on screen. Clearing the text deletes the
+    /// annotation — there is nothing meaningful left to show.
+    private func updateTextAnnotation(_ existing: Annotation, with text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            document.remove(id: existing.id)
+            return
+        }
+        var updated = existing
+        updated.text = trimmed
+        updated.opacity = 1
+        updated.bounds = Annotation.textBounds(
+            for: trimmed,
+            lineWidth: existing.lineWidth,
+            origin: existing.path.first ?? existing.bounds.origin
+        )
+        document.update(updated)
+        scheduleAutoFade(updated)
+    }
+
+    // MARK: - Auto-erase
+
+    /// Fades an annotation away after the configured delay.
+    ///
+    /// The delay is read once, when the annotation is created: changing the
+    /// setting later only affects annotations drawn afterwards. Step
+    /// numbers are excluded from the timer entirely (see `isFadeable`).
+    private func scheduleAutoFade(_ annotation: Annotation) {
+        guard settings.autoFadeSeconds > 0, annotation.isFadeable else { return }
+        let id = annotation.id
+        let delay = settings.autoFadeSeconds
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
+            self?.fadeOut(id: id)
+        }
+    }
+
+    /// Animates one annotation's opacity down and then removes it.
+    ///
+    /// None of the fade steps nor the final removal enter the undo history
+    /// (`recordHistory: false`): the timer is not a user decision, so undo
+    /// stays reserved for the actions the user actually took. Each step
+    /// re-reads the annotation, so anything that happens in flight — an
+    /// undo, a manual delete, an edit — is respected and quietly ends the
+    /// fade; turning the setting off mid-fade abandons the fade too.
+    private func fadeOut(id: Annotation.ID) {
+        Task { @MainActor [weak self] in
+            let steps = 5
+            for _ in 0..<steps {
+                guard let self,
+                      self.settings.autoFadeSeconds > 0,
+                      let current = self.document.annotations.first(where: { $0.id == id })
+                else { return }
+
+                var fading = current
+                fading.opacity = max(fading.opacity - 1 / Double(steps), 0)
+                self.document.update(fading, recordHistory: false)
+                try? await Task.sleep(nanoseconds: 120_000_000)
+            }
+            guard let self, self.settings.autoFadeSeconds > 0 else { return }
+            self.document.remove(id: id, recordHistory: false)
+        }
     }
 
     // MARK: - Recording

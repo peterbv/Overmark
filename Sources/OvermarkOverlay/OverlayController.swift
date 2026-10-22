@@ -47,6 +47,8 @@ public final class OverlayController {
     /// The handler invoked when a canvas asks to delete an annotation.
     private var onAnnotationDelete: ((Annotation) -> Void)?
 
+    private var onAnnotationEdit: ((Annotation) -> Void)?
+
     public init() {}
 
     /// Probe-only stderr logging. Avoids cluttering normal runs: the env
@@ -138,6 +140,7 @@ public final class OverlayController {
             // freshly shown overlay still reach the app.
             canvas.onAnnotationCreated = onAnnotationCreated
             canvas.onClick = onClick
+            canvas.onAnnotationEdit = onAnnotationEdit
 
             panel.contentView = canvas
             panel.presentAboveAll()
@@ -204,16 +207,19 @@ public final class OverlayController {
     public func bind(
         onAnnotationCreated: @escaping (Annotation) -> Void,
         onClick: @escaping (Point) -> Void,
-        onAnnotationDelete: @escaping (Annotation) -> Void
+        onAnnotationDelete: @escaping (Annotation) -> Void,
+        onAnnotationEdit: @escaping (Annotation) -> Void
     ) {
         self.onAnnotationCreated = onAnnotationCreated
         self.onClick = onClick
         self.onAnnotationDelete = onAnnotationDelete
+        self.onAnnotationEdit = onAnnotationEdit
 
         for entry in entries.values {
             entry.canvas.onAnnotationCreated = onAnnotationCreated
             entry.canvas.onClick = onClick
             entry.canvas.onAnnotationDelete = onAnnotationDelete
+            entry.canvas.onAnnotationEdit = onAnnotationEdit
         }
     }
 

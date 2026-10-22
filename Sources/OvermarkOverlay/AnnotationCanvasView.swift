@@ -135,6 +135,10 @@ public final class AnnotationCanvasView: NSView {
 
     // MARK: - Mouse events
 
+    /// Fired when a click lands on an existing text annotation, so the app
+    /// layer can reopen the editor over it. Only used by the text tool.
+    public var onAnnotationEdit: ((Annotation) -> Void)?
+
     public override func mouseDown(with event: NSEvent) {
         guard isInteractionEnabled else { return }
         let point = screenPoint(from: event)
@@ -175,7 +179,21 @@ public final class AnnotationCanvasView: NSView {
             onAnnotationCreated?(annotation)
             onDragEnded?(point)
         } else if let down = mouseDownPoint, down.distance(to: point) < 3 {
-            onClick?(point)
+            if tool == .text,
+               let hit = Annotation.annotation(
+                   at: point,
+                   in: annotations,
+                   fillsShapes: fillsShapes,
+                   on: screen
+               ),
+               hit.tool == .text {
+                // A plain click on an existing text annotation re-edits it
+                // instead of stacking a fresh one on top. Creating new text
+                // is what a click on empty canvas does.
+                onAnnotationEdit?(hit)
+            } else {
+                onClick?(point)
+            }
         }
 
         isDragging = false

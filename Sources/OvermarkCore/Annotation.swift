@@ -339,6 +339,15 @@ public extension Annotation {
         let radius = max(lineWidth * 4, 18)
         return point.distance(to: bounds.center) <= radius + Self.hitSlack
     }
+
+    /// Whether the auto-erase timer applies to this annotation.
+    ///
+    /// Everything drawn fades away on its own when the timer is on; step
+    /// numbers are structural stamps ("step 2") that anchor a narrative, so
+    /// they stay until cleared or deleted manually.
+    public var isFadeable: Bool {
+        tool.producesAnnotation && tool != .stepNumber
+    }
 }
 
 // MARK: - Text layout

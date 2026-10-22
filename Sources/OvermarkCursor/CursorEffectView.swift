@@ -2,6 +2,27 @@ import AppKit
 import Foundation
 import OvermarkCore
 
+/// One click's ripple animation: where it happened and which button.
+public struct ClickPulse: Equatable, Sendable {
+    public enum Button: String, Equatable, Sendable {
+        case left
+        case right
+    }
+
+    /// The click position, in screen space.
+    public let point: Point
+    /// Which button made the click.
+    public let button: Button
+    /// When the animation started.
+    let startedAt: Date
+
+    public init(point: Point, button: Button = .left) {
+        self.point = point
+        self.button = button
+        self.startedAt = Date()
+    }
+}
+
 /// A transparent, non-activating view that draws the cursor effects.
 ///
 /// Like the annotation overlay, this view never becomes key, so the user can
@@ -26,6 +47,29 @@ public final class CursorEffectView: NSView {
     public var screen: ScreenFrame = ScreenFrame(origin: .zero, size: .zero) {
         didSet { needsDisplay = true }
     }
+
+    /// The click animation currently playing, in screen space.
+    ///
+    /// Assigning starts the ripple on this display; clearing it (or letting
+    /// it time out) stops it. The effect windows are built per display, so a
+    /// click only ever lives on the one view that hosts that screen — the
+    /// controller decides which view gets it.
+    public var clickPulse: ClickPulse? {
+        didSet {
+            needsDisplay = true
+            if clickPulse == nil {
+                stopPulseTicker()
+            } else {
+                startPulseTicker()
+            }
+        }
+    }
+
+    /// How long one click ripple plays, in seconds.
+    static let pulseDuration: TimeInterval = 0.45
+
+    /// The 60 fps ticker that keeps redrawing while a ripple plays.
+    private var pulseTicker: Timer?
 
     public override init(frame frameRect: NSRect) {
         self.effects = CursorEffects()
@@ -71,6 +115,71 @@ public final class CursorEffectView: NSView {
         if effects.isHighlightEnabled && isCursorHere {
             drawHighlight(cursor: cursor, in: context)
         }
+
+        if let pulse = clickPulse,
+           pulseElapsed(pulse) < Self.pulseDuration + 0.05 {
+            let local = Point(
+                x: pulse.point.x - originX,
+                y: pulse.point.y - originY
+            )
+            // The ripple may spill past the edge, hence the generous margin:
+            // what matters is rejecting ripples that belong to a neighbour.
+            let margin = effects.highlightRadius * 2
+            let pulseHere =
+                local.x >= -margin && local.x <= bounds.maxX + margin &&
+                local.y >= -margin && local.y <= bounds.maxY + margin
+            if pulseHere {
+                drawClickPulse(
+                    pulse,
+                    originX: originX,
+                    originY: originY,
+                    in: context
+                )
+            }
+        }
+    }
+
+    // MARK: - Pulse timing
+
+    /// Seconds since the pulse started.
+    private func pulseElapsed(_ pulse: ClickPulse) -> TimeInterval {
+        Date().timeIntervalSince(pulse.startedAt)
+    }
+
+    /// Keeps redrawing while a ripple plays.
+    ///
+    /// The ripple animates over time, but nothing moves the view itself, so
+    /// nothing else would invalidate it — this 60 fps ticker drives the
+    /// redraws and stops itself once the pulse is done. The tick always runs
+    /// on the main run loop, so the isolated body is assumed intentionally.
+    private func startPulseTicker() {
+        guard pulseTicker == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] sender in
+            guard let self else {
+                // The view is gone; nobody else can stop this timer.
+                sender.invalidate()
+                return
+            }
+            MainActor.assumeIsolated {
+                guard let pulse = self.clickPulse else {
+                    self.stopPulseTicker()
+                    return
+                }
+                let elapsed = Date().timeIntervalSince(pulse.startedAt)
+                if elapsed > Self.pulseDuration + 0.05 {
+                    self.stopPulseTicker()
+                } else {
+                    self.needsDisplay = true
+                }
+            }
+        }
+        pulseTicker = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopPulseTicker() {
+        pulseTicker?.invalidate()
+        pulseTicker = nil
     }
 
     // MARK: - Effects

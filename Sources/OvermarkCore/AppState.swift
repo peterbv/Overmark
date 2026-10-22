@@ -45,6 +45,14 @@ public struct CursorEffects: Hashable, Sendable, Codable {
     public var zoomSize: Double
     /// Shape of the zoom lens.
     public var zoomShape: ZoomShape
+    /// Shape of the highlight ring drawn around the pointer.
+    public var highlightShape: HighlightShape
+    /// Thickness of the highlight ring's border, in points.
+    public var highlightBorderWidth: Double
+    /// Opacity of the highlight ring's fill, 0...1.
+    public var highlightFillOpacity: Double
+    /// Whether clicks play a ripple animation around the pointer.
+    public var isClickAnimationEnabled: Bool
 
     public init(
         isHighlightEnabled: Bool = false,
@@ -56,7 +64,11 @@ public struct CursorEffects: Hashable, Sendable, Codable {
         isZoomEnabled: Bool = false,
         zoomFactor: Double = 2,
         zoomSize: Double = 240,
-        zoomShape: ZoomShape = .circle
+        zoomShape: ZoomShape = .circle,
+        highlightShape: HighlightShape = .circle,
+        highlightBorderWidth: Double = 3,
+        highlightFillOpacity: Double = 0.35,
+        isClickAnimationEnabled: Bool = true
     ) {
         self.isHighlightEnabled = isHighlightEnabled
         self.highlightRadius = highlightRadius
@@ -68,7 +80,20 @@ public struct CursorEffects: Hashable, Sendable, Codable {
         self.zoomFactor = zoomFactor
         self.zoomSize = zoomSize
         self.zoomShape = zoomShape
+        self.highlightShape = highlightShape
+        self.highlightBorderWidth = highlightBorderWidth
+        self.highlightFillOpacity = highlightFillOpacity
+        self.isClickAnimationEnabled = isClickAnimationEnabled
     }
+}
+
+/// The shape of the pointer highlight ring.
+public enum HighlightShape: String, Hashable, Sendable, Codable, CaseIterable, Identifiable {
+    case circle
+    case squircle
+    case rhombus
+
+    public var id: String { rawValue }
 }
 
 /// The shape of the zoom lens.
@@ -96,6 +121,12 @@ public struct ToolSettings: Hashable, Sendable, Codable {
     /// off the canvas owns all clicks outside the menu bar strip (the older
     /// behaviour).
     public var holdOptionToDraw: Bool
+    /// Seconds after which a drawn annotation fades away on its own.
+    ///
+    /// `0` disables the timer. Step numbers are excluded — they anchor the
+    /// narrative — and only annotations *created* while the timer is on are
+    /// affected.
+    public var autoFadeSeconds: Int
 
     public init(
         tool: AnnotationTool = .pen,
@@ -103,7 +134,8 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         lineWidth: Double = 4,
         fillsShapes: Bool = false,
         nextStepNumber: Int = 1,
-        holdOptionToDraw: Bool = true
+        holdOptionToDraw: Bool = true,
+        autoFadeSeconds: Int = 0
     ) {
         self.tool = tool
         self.color = color
@@ -111,5 +143,6 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         self.fillsShapes = fillsShapes
         self.nextStepNumber = nextStepNumber
         self.holdOptionToDraw = holdOptionToDraw
+        self.autoFadeSeconds = autoFadeSeconds
     }
 }

@@ -119,37 +119,110 @@ extension CursorEffectView {
         return image.cropping(to: clamped)
     }
 
-    /// Draws a coloured ring around the pointer.
+    /// Draws the styled ring around the pointer.
+    ///
+    /// The shape, fill opacity and border thickness all come from settings;
+    /// the fill is kept translucent so what is under the pointer stays
+    /// readable, and the border sits centered on the shape path like the old
+    /// solid ring did.
     func drawHighlight(cursor: Point, in context: CGContext) {
         context.saveGState()
         defer { context.restoreGState() }
 
         let radius = effects.highlightRadius
         let color = effects.highlightColor
+        let rect = CGRect(
+            x: cursor.x - radius,
+            y: cursor.y - radius,
+            width: radius * 2,
+            height: radius * 2
+        )
+        let path = highlightPath(in: rect, shape: effects.highlightShape)
 
         context.setFillColor(CGColor(
             red: color.red,
             green: color.green,
             blue: color.blue,
-            alpha: 0.35
+            alpha: max(0, min(1, effects.highlightFillOpacity))
         ))
-        context.fillEllipse(in: CGRect(
-            x: cursor.x - radius,
-            y: cursor.y - radius,
-            width: radius * 2,
-            height: radius * 2
-        ))
+        context.addPath(path)
+        context.fillPath()
+
+        let borderWidth = max(0, effects.highlightBorderWidth)
+        if borderWidth >= 0.5 {
+            context.setStrokeColor(CGColor(
+                red: color.red,
+                green: color.green,
+                blue: color.blue,
+                alpha: 1
+            ))
+            context.setLineWidth(borderWidth)
+            context.addPath(path)
+            context.strokePath()
+        }
+    }
+
+    /// The configured ring shape as a reusable path.
+    private func highlightPath(in rect: CGRect, shape: HighlightShape) -> CGPath {
+        switch shape {
+        case .circle:
+            return CGPath(ellipseIn: rect, transform: nil)
+        case .squircle:
+            return CGPath(
+                roundedRect: rect,
+                cornerWidth: rect.width * 0.25,
+                cornerHeight: rect.height * 0.25,
+                transform: nil
+            )
+        case .rhombus:
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+            path.closeSubpath()
+            return path
+        }
+    }
+
+    /// Plays one click ripple: a circle that expands and fades.
+    ///
+    /// Left clicks use the ring colour at full presence; right clicks draw a
+    /// thinner, more subdued ripple, so the two feel different without
+    /// needing a separate setting.
+    func drawClickPulse(
+        _ pulse: ClickPulse,
+        originX: Double,
+        originY: Double,
+        in context: CGContext
+    ) {
+        context.saveGState()
+        defer { context.restoreGState() }
+
+        let progress = min(
+            max(Date().timeIntervalSince(pulse.startedAt) / Self.pulseDuration, 0),
+            1
+        )
+        let color = effects.highlightColor
+        let isRight = pulse.button == .right
+        let startRadius = effects.highlightRadius * 0.4
+        let endRadius = effects.highlightRadius * 1.9
+        let radius = (startRadius + (endRadius - startRadius) * progress)
+            * (isRight ? 0.75 : 1)
+        let alpha = (isRight ? 0.5 : 0.85) * (1 - progress)
 
         context.setStrokeColor(CGColor(
             red: color.red,
             green: color.green,
             blue: color.blue,
-            alpha: 1
+            alpha: alpha
         ))
-        context.setLineWidth(3)
+        context.setLineWidth(
+            max(1.5, effects.highlightBorderWidth * (isRight ? 0.6 : 1))
+        )
         context.strokeEllipse(in: CGRect(
-            x: cursor.x - radius,
-            y: cursor.y - radius,
+            x: pulse.point.x - originX - radius,
+            y: pulse.point.y - originY - radius,
             width: radius * 2,
             height: radius * 2
         ))
