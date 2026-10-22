@@ -127,6 +127,11 @@ public struct ToolSettings: Hashable, Sendable, Codable {
     /// narrative — and only annotations *created* while the timer is on are
     /// affected.
     public var autoFadeSeconds: Int
+    /// Final colour of the gradient stroke, or `nil` while gradients are off.
+    ///
+    /// Strokes blend from `color` at the start of the mark to this colour at
+    /// the end. `nil` (the default) keeps every stroke solid.
+    public var gradientColor: Color?
 
     public init(
         tool: AnnotationTool = .pen,
@@ -135,7 +140,8 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         fillsShapes: Bool = false,
         nextStepNumber: Int = 1,
         holdOptionToDraw: Bool = true,
-        autoFadeSeconds: Int = 0
+        autoFadeSeconds: Int = 0,
+        gradientColor: Color? = nil
     ) {
         self.tool = tool
         self.color = color
@@ -144,5 +150,6 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         self.nextStepNumber = nextStepNumber
         self.holdOptionToDraw = holdOptionToDraw
         self.autoFadeSeconds = autoFadeSeconds
+        self.gradientColor = gradientColor
     }
 }

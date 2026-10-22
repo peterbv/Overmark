@@ -3,7 +3,7 @@ import SwiftUI
 import OvermarkCore
 
 /// The core colour type, aliased to avoid colliding with `SwiftUI.Color`.
-typealias AnnotationColor = OvermarkCore.Color
+public typealias AnnotationColor = OvermarkCore.Color
 
 /// The settings window.
 ///
@@ -54,6 +54,35 @@ struct SettingsView: View {
 
                 Toggle(L10n.tr("Fill shapes"), isOn: $coordinator.settings.fillsShapes)
 
+                Toggle(
+                    L10n.tr("Gradient stroke"),
+                    isOn: Binding(
+                        get: { coordinator.settings.gradientColor != nil },
+                        set: { on in
+                            if on, coordinator.settings.gradientColor == nil {
+                                coordinator.settings.gradientColor = AnnotationColor.blue
+                            } else if !on {
+                                coordinator.settings.gradientColor = nil
+                            }
+                        }
+                    )
+                )
+
+                if coordinator.settings.gradientColor != nil {
+                    HStack(spacing: 8) {
+                        Text(L10n.tr("End colour"))
+                        ColorPalette(selection: Binding(
+                            get: { coordinator.settings.gradientColor ?? AnnotationColor.blue },
+                            set: { coordinator.settings.gradientColor = $0 }
+                        ))
+                    }
+
+                    Text(L10n.tr("Strokes blend from the starting colour into the end colour along the line."))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Toggle(L10n.tr("Draw with ⌥ held"), isOn: $coordinator.settings.holdOptionToDraw)
                     .help(
                         L10n.tr("On: clicks pass through to the app underneath and only clicks with ⌥ (Option) held draw on the overlay. Off: the overlay captures every click outside the menu bar strip.")
@@ -101,7 +130,11 @@ struct SettingsView: View {
             }
 
             Section(L10n.tr("Colour")) {
-                ColorPalette(selection: $coordinator.settings.color)
+                ColorPalette(
+                    selection: $coordinator.settings.color,
+                    favorites: coordinator.favoriteColors,
+                    onAddFavorite: { coordinator.showColorPanel() }
+                )
             }
         }
         .formStyle(.grouped)
@@ -515,12 +548,24 @@ struct SettingsView: View {
 
 /// The row of colour swatches, shared by the settings window and the
 /// annotation toolbar.
+///
+/// Favourite colours appear after the built-in palette, and a "+" button
+/// opens the system colour panel to record a new favourite.
 struct ColorPalette: View {
     @Binding var selection: AnnotationColor
+    /// Custom colours the user saved, drawn after the built-in palette.
+    var favorites: [AnnotationColor] = []
+    /// Starts the "add a colour" flow when non-nil.
+    var onAddFavorite: (() -> Void)? = nil
+
+    /// Built-ins plus any favourites that are not already in the palette.
+    private var swatches: [AnnotationColor] {
+        AnnotationColor.palette + favorites.filter { !AnnotationColor.palette.contains($0) }
+    }
 
     var body: some View {
         HStack(spacing: 10) {
-            ForEach(AnnotationColor.palette, id: \.self) { color in
+            ForEach(swatches, id: \.self) { color in
                 Circle()
                     .fill(color.swiftUIColor)
                     .frame(width: 22, height: 22)
@@ -535,6 +580,23 @@ struct ColorPalette: View {
                     .onTapGesture {
                         selection = color
                     }
+            }
+
+            if let onAddFavorite {
+                Button(action: onAddFavorite) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .semibold))
+                        .frame(width: 18, height: 18)
+                        .background(
+                            Circle()
+                                .strokeBorder(
+                                    Color.primary.opacity(0.45),
+                                    style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .help(L10n.tr("Add colour…"))
             }
         }
         .padding(.vertical, 4)

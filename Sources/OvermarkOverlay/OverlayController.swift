@@ -185,6 +185,7 @@ public final class OverlayController {
             entry.canvas.color = settings.color
             entry.canvas.lineWidth = settings.lineWidth
             entry.canvas.fillsShapes = settings.fillsShapes
+            entry.canvas.gradientColor = settings.gradientColor
             entry.canvas.nextStepNumber = settings.nextStepNumber
             entry.canvas.holdOptionToDraw = isOptionToDrawMode
         }

@@ -34,8 +34,19 @@ public final class AppCoordinator: ObservableObject {
     }
 
     /// The selected tool, colour and width.
+    ///
+    /// Changes persist between launches: the whole struct is written through
+    /// to user defaults on every change.
     @Published public var settings = ToolSettings() {
-        didSet { overlay.apply(settings: settings) }
+        didSet {
+            overlay.apply(settings: settings)
+            PreferencesStore.save(settings)
+        }
+    }
+
+    /// Colours the user added from the colour panel, shown in the palette.
+    @Published public var favoriteColors: [AnnotationColor] = [] {
+        didSet { PreferencesStore.save(favoriteColors) }
     }
 
     /// The cursor effects currently enabled.
@@ -45,6 +56,7 @@ public final class AppCoordinator: ObservableObject {
     /// which keeps the spotlight/zoom controls smooth while they change.
     @Published public var cursorEffects = CursorEffects() {
         didSet {
+            PreferencesStore.save(cursorEffects)
             updateClickMonitor()
             Task { await effectController.apply(effects: cursorEffects) }
         }
@@ -52,6 +64,10 @@ public final class AppCoordinator: ObservableObject {
 
     /// The most recent error message, shown in the UI.
     @Published public var lastError: String?
+
+    /// The `NSColorWell` that receives the shared colour panel's picks while
+    /// the user chooses a favourite colour.
+    private var colorWell: NSColorWell?
 
     /// The app's user-facing language, shown in the General settings tab.
     ///
@@ -171,6 +187,14 @@ public final class AppCoordinator: ObservableObject {
             cursorTracker: cursorTracker
         )
 
+        // Restore the user's choices before any handler registers, so the
+        // first push to the overlay already carries the persisted state. The
+        // assignments fire the `didSet` blocks, which push to the overlay,
+        // apply the effects and write through — all harmless repeats.
+        settings = PreferencesStore.loadToolSettings()
+        favoriteColors = PreferencesStore.loadFavoriteColors()
+        cursorEffects = PreferencesStore.loadCursorEffects()
+
         hotKeys.onAction = { [weak self] action in
             self?.handle(action)
         }
@@ -253,6 +277,12 @@ public final class AppCoordinator: ObservableObject {
         overlay.tearDown()
         effectController.tearDown()
         removeClickMonitors()
+        // The colour well outlives the overlay windows; detach it so a quit
+        // does not leave a target pointing at a coordinator that is going
+        // away.
+        colorWell?.target = nil
+        colorWell = nil
+        NSColorPanel.shared.orderOut(nil)
         if let screensObserver {
             NotificationCenter.default.removeObserver(screensObserver)
         }
@@ -692,6 +722,44 @@ public final class AppCoordinator: ObservableObject {
         globalClickMonitor = nil
     }
 
+    // MARK: - Colour favourites
+
+    /// Shows the system colour panel, raised above the overlay panels, and
+    /// records picked colours as favourites.
+    ///
+    /// A detached `NSColorWell` is the receiver: activating it opens the
+    /// shared panel and every picked colour flows back through the well's
+    /// target/action, which is portable across SDK versions where
+    /// `NSColorPanel`'s own target/action are unavailable.
+    public func showColorPanel() {
+        let well = NSColorWell()
+        well.target = self
+        well.action = #selector(colorWellPicked(_:))
+        colorWell = well
+        well.activate(true)
+
+        // The overlays float at the status bar level; keep the panel above
+        // them so it stays usable during a presentation.
+        NSColorPanel.shared.level = NSWindow.Level(
+            rawValue: NSWindow.Level.statusBar.rawValue + 1
+        )
+    }
+
+    @objc private func colorWellPicked(_ sender: NSColorWell) {
+        guard let rgb = sender.color.usingColorSpace(.sRGB) else { return }
+        addFavorite(AnnotationColor(
+            red: Double(rgb.redComponent),
+            green: Double(rgb.greenComponent),
+            blue: Double(rgb.blueComponent)
+        ))
+    }
+
+    /// Records a colour as a favourite. Duplicates are collapsed and the
+    /// oldest colours fall out once the list is full.
+    public func addFavorite(_ color: AnnotationColor) {
+        favoriteColors = PreferencesStore.addFavorite(color, to: favoriteColors)
+    }
+
     /// Opens the text editor and adds the resulting annotation.
     ///
     /// Pass `editing` to re-edit an existing text annotation: the editor is
@@ -739,7 +807,7 @@ public final class AppCoordinator: ObservableObject {
                     window.close()
                     self?.endTextEditing()
                 },
-                onCommit: { [weak self] text in
+                onCommit: { [weak self] (text: String) in
                     window.close()
                     self?.endTextEditing()
                     if let existing {

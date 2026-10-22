@@ -12,12 +12,9 @@ public struct AnnotationRenderer: Sendable {
     public struct Style: Sendable {
         /// Scale factor from points to device pixels.
         public var scale: Double
-        /// Whether shapes are filled with a translucent version of the colour.
-        public var fillsShapes: Bool
 
-        public init(scale: Double = 2, fillsShapes: Bool = false) {
+        public init(scale: Double = 2) {
             self.scale = scale
-            self.fillsShapes = fillsShapes
         }
     }
 

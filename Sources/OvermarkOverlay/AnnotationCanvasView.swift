@@ -48,7 +48,17 @@ public final class AnnotationCanvasView: NSView {
     public var lineWidth: Double = 4
 
     /// Whether shapes should be filled.
+    ///
+    /// The value is baked into annotations while they are created, so
+    /// changing it later only affects new shapes.
     public var fillsShapes = false {
+        didSet { needsDisplay = true }
+    }
+
+    /// The final colour of gradient strokes for new annotations, or `nil`
+    /// while gradients are off. Like the fill flag, it is stored on each
+    /// annotation at creation time.
+    public var gradientColor: Color? {
         didSet { needsDisplay = true }
     }
 
@@ -106,9 +116,7 @@ public final class AnnotationCanvasView: NSView {
         // The view's coordinate space is already in points with the origin at
         // the bottom-left, matching the screen space the annotations use. The
         // only translation needed is the screen's origin within the desktop.
-        let renderer = AnnotationRenderer(
-            style: .init(scale: 1, fillsShapes: fillsShapes)
-        )
+        let renderer = AnnotationRenderer(style: .init(scale: 1))
 
         var toDraw = annotations
         if let inProgress {
@@ -180,12 +188,7 @@ public final class AnnotationCanvasView: NSView {
             onDragEnded?(point)
         } else if let down = mouseDownPoint, down.distance(to: point) < 3 {
             if tool == .text,
-               let hit = Annotation.annotation(
-                   at: point,
-                   in: annotations,
-                   fillsShapes: fillsShapes,
-                   on: screen
-               ),
+               let hit = Annotation.annotation(at: point, in: annotations, on: screen),
                hit.tool == .text {
                 // A plain click on an existing text annotation re-edits it
                 // instead of stacking a fresh one on top. Creating new text
@@ -231,7 +234,6 @@ public final class AnnotationCanvasView: NSView {
         guard let annotation = Annotation.annotation(
             at: point,
             in: annotations,
-            fillsShapes: fillsShapes,
             on: screen
         ) else { return }
         onAnnotationDelete?(annotation)
@@ -280,13 +282,19 @@ public final class AnnotationCanvasView: NSView {
     // MARK: - Annotation construction
 
     /// Builds an annotation from the collected drag points.
+    ///
+    /// The fill and gradient state is recorded on the annotation itself, so
+    /// the mark keeps the look it had when drawn even after the settings
+    /// change.
     private func makeAnnotation(from points: [Point]) -> Annotation {
         var annotation = Annotation(
             tool: tool,
             color: color,
             lineWidth: lineWidth,
             path: points,
-            bounds: Annotation.bounds(of: points)
+            bounds: Annotation.bounds(of: points),
+            fillsShapes: fillsShapes,
+            gradientColor: gradientColor
         )
 
         if tool == .stepNumber {

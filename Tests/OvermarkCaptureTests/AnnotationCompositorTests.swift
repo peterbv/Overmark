@@ -383,4 +383,86 @@ struct AnnotationCompositorTests {
         #expect(rightEdge.r > 200)
         #expect(rightEdge.g < 60)
     }
+
+    @Test("A filled rectangle exports with its interior")
+    func filledShapeExportsLikeTheCanvas() {
+        let image = whiteImage(width: 200, height: 100)
+        let rect = Annotation(
+            tool: .rectangle,
+            color: .red,
+            path: [Point(x: 20, y: 30), Point(x: 140, y: 80)],
+            bounds: Rect(origin: Point(x: 20, y: 30), size: Size(width: 120, height: 50)),
+            fillsShapes: true
+        )
+
+        let result = AnnotationCompositor.composited(
+            image: image,
+            annotations: [rect],
+            screen: screen
+        )
+
+        // The fill flag lives on the annotation now, so the compositor —
+        // which passes no fill state of its own — still shows the interior.
+        let pixels = rawPixels(of: result)
+        let inside = pixel(of: pixels, width: 200, row: 99 - 55, column: 80)
+        #expect(inside.r > 250)  // 25% red over white
+        #expect(inside.g < 230)  // ...and green pulled toward red's g
+    }
+
+    @Test("A gradient pen stroke blends along its length")
+    func gradientStrokeBlendsAlongItsLength() {
+        let image = whiteImage(width: 200, height: 100)
+        let stroke = Annotation(
+            tool: .pen,
+            color: .red,
+            lineWidth: 10,
+            path: [Point(x: 30, y: 50), Point(x: 170, y: 50)],
+            bounds: Rect(origin: Point(x: 30, y: 50), size: Size(width: 140, height: 0)),
+            gradientColor: .blue
+        )
+
+        let result = AnnotationCompositor.composited(
+            image: image,
+            annotations: [stroke],
+            screen: screen
+        )
+
+        let pixels = rawPixels(of: result)
+        // Row 49 is inside the 10-point band at y = 50. The blends come in
+        // quantized pieces, so the test asserts the DIRECTION of the blend
+        // with a forgiving margin rather than exact channel values.
+        let nearStart = pixel(of: pixels, width: 200, row: 49, column: 36)
+        let nearEnd = pixel(of: pixels, width: 200, row: 49, column: 164)
+        // Red dominates near the start, blue near the end.
+        #expect(nearStart.r > nearStart.b + 60)
+        #expect(nearEnd.b > nearEnd.r + 60)
+        #expect(nearEnd.b > nearStart.b)  // blue rises towards the end
+        #expect(nearEnd.b > 200)
+    }
+
+    @Test("A solid stroke ignores the gradient state entirely")
+    func solidStrokeStaysSolid() {
+        let image = whiteImage(width: 200, height: 100)
+        // gradientColor is nil: whole stroke is the start colour.
+        let stroke = Annotation(
+            tool: .line,
+            color: .green,
+            lineWidth: 10,
+            path: [Point(x: 30, y: 50), Point(x: 170, y: 50)],
+            bounds: Rect(origin: Point(x: 30, y: 50), size: Size(width: 140, height: 0))
+        )
+
+        let result = AnnotationCompositor.composited(
+            image: image,
+            annotations: [stroke],
+            screen: screen
+        )
+
+        let pixels = rawPixels(of: result)
+        let start = pixel(of: pixels, width: 200, row: 49, column: 45)
+        let end = pixel(of: pixels, width: 200, row: 49, column: 155)
+        // Both ends show the same green: no drift towards blue.
+        #expect(abs(start.g - end.g) < 60)
+        #expect(start.r < 150 && end.r < 150)
+    }
 }

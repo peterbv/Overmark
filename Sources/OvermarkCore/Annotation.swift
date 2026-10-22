@@ -75,6 +75,20 @@ public struct Color: Hashable, Sendable, Codable {
     public static let palette: [Color] = [
         .red, .yellow, .green, .blue, .orange, .pink, .white, .black,
     ]
+
+    /// The colour reached from `self` after `t` of the way towards `other`.
+    ///
+    /// `t` 0 is `self`, `t` 1 is `other`, values outside 0...1 are clamped.
+    /// Used by the gradient stroke, which blends the two ends of a mark.
+    public func lerped(to other: Color, at t: Double) -> Color {
+        let t = min(max(t, 0), 1)
+        return Color(
+            red: red + (other.red - red) * t,
+            green: green + (other.green - green) * t,
+            blue: blue + (other.blue - blue) * t,
+            alpha: alpha + (other.alpha - alpha) * t
+        )
+    }
 }
 
 /// A single annotation drawn on the canvas.
@@ -98,6 +112,17 @@ public struct Annotation: Identifiable, Hashable, Sendable, Codable {
     public var stepNumber: Int?
     /// Opacity of the annotation (0...1).
     public var opacity: Double
+    /// Whether the shape is drawn with a translucent interior.
+    ///
+    /// Stored at creation time (like the colour), so shapes keep the fill the
+    /// user chose when drawing them and exports or recordings render exactly
+    /// what the live canvas showed.
+    public var fillsShapes: Bool
+    /// Final colour of a gradient stroke, or `nil` for a solid stroke.
+    ///
+    /// When set, stroke tools blend from the annotation's colour at the start
+    /// of the path to this colour at the end.
+    public var gradientColor: Color?
 
     public init(
         id: UUID = UUID(),
@@ -108,7 +133,9 @@ public struct Annotation: Identifiable, Hashable, Sendable, Codable {
         bounds: Rect = Rect(origin: .zero, size: .zero),
         text: String? = nil,
         stepNumber: Int? = nil,
-        opacity: Double = 1
+        opacity: Double = 1,
+        fillsShapes: Bool = false,
+        gradientColor: Color? = nil
     ) {
         self.id = id
         self.tool = tool
@@ -119,6 +146,8 @@ public struct Annotation: Identifiable, Hashable, Sendable, Codable {
         self.text = text
         self.stepNumber = stepNumber
         self.opacity = opacity
+        self.fillsShapes = fillsShapes
+        self.gradientColor = gradientColor
     }
 
     /// Computes the bounding box of a sequence of points.
@@ -170,15 +199,18 @@ public extension Annotation {
     /// - Parameters:
     ///   - point: The point, in screen space.
     ///   - annotations: The candidate annotations, in painting order.
-    ///   - fillsShapes: Whether filled shapes count their interior, matching
-    ///     how they are drawn.
+    ///   - fillsShapes: An override for whether filled shapes count their
+    ///     interior. `nil` (the default) means each annotation decides with
+    ///     its own stored `fillsShapes` flag, which is how it is drawn; a
+    ///     value can force the answer for a caller that renders with a
+    ///     different fill state.
     ///   - screen: The display the point belongs to, or `nil` to test against
     ///     the whole desktop.
     /// - Returns: The topmost annotation hit, or `nil` when none matches.
     static func annotation(
         at point: Point,
         in annotations: [Annotation],
-        fillsShapes: Bool,
+        fillsShapes: Bool? = nil,
         on screen: ScreenFrame? = nil
     ) -> Annotation? {
         for annotation in annotations.reversed() {
@@ -195,16 +227,17 @@ public extension Annotation {
     /// text and step numbers count generous bounds. Tools that paint nothing
     /// — spotlight, blur, laser — are never hittable, matching
     /// `producesAnnotation`.
-    func isHit(at point: Point, fillsShapes: Bool) -> Bool {
+    func isHit(at point: Point, fillsShapes override: Bool? = nil) -> Bool {
+        let fill = override ?? fillsShapes
         guard tool.producesAnnotation else { return false }
 
         switch tool {
         case .pen, .highlighter, .line, .arrow:
             return isStrokeHit(at: point)
         case .rectangle:
-            return isRectangleHit(at: point, fillsShapes: fillsShapes)
+            return isRectangleHit(at: point, fillsShapes: fill)
         case .ellipse:
-            return isEllipseHit(at: point, fillsShapes: fillsShapes)
+            return isEllipseHit(at: point, fillsShapes: fill)
         case .text:
             return isTextHit(at: point)
         case .stepNumber:
@@ -345,7 +378,7 @@ public extension Annotation {
     /// Everything drawn fades away on its own when the timer is on; step
     /// numbers are structural stamps ("step 2") that anchor a narrative, so
     /// they stay until cleared or deleted manually.
-    public var isFadeable: Bool {
+    var isFadeable: Bool {
         tool.producesAnnotation && tool != .stepNumber
     }
 }

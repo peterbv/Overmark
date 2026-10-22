@@ -423,7 +423,11 @@ struct AnnotationToolbarView: View {
 
     private var styleRow: some View {
         HStack(spacing: 10) {
-            ColorPalette(selection: $coordinator.settings.color)
+            ColorPalette(
+                selection: $coordinator.settings.color,
+                favorites: coordinator.favoriteColors,
+                onAddFavorite: { coordinator.showColorPanel() }
+            )
 
             Divider()
                 .frame(height: 22)
