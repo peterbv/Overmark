@@ -1,11 +1,11 @@
 #!/bin/bash
 #
-# Builds Presentify.app and packages it into a DMG.
+# Builds Overmark.app and packages it into a DMG.
 #
 # The app bundle is what makes the macOS permission system work: TCC keys
 # permissions on the bundle identifier, so a bare executable can never appear
 # in "Privacy & Security". Shipping a bundle with a stable identifier is what
-# lets the user grant Screen Recording and Accessibility to Presentify itself
+# lets the user grant Screen Recording and Accessibility to Overmark itself
 # instead of to the terminal that launched it.
 #
 # Usage:
@@ -18,9 +18,9 @@
 set -euo pipefail
 
 readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly APP_NAME="Presentify"
-readonly BUNDLE_ID="com.presentify.app"
-readonly SIGNING_IDENTITY="${PRESENTIFY_SIGN_IDENTITY:-}"
+readonly APP_NAME="Overmark"
+readonly BUNDLE_ID="com.overmark.app"
+readonly SIGNING_IDENTITY="${OVERMARK_SIGN_IDENTITY:-}"
 
 CONFIGURATION="release"
 IDENTITY="-"
@@ -109,7 +109,7 @@ iconutil -c icns "$ICONSET" -o "$RESOURCES_DIR/$APP_NAME.icns"
 echo "==> Signing"
 # The entitlement is what lets the app move the cursor, which the Accessibility
 # permission covers. `get-task-allow` is only wanted in debug builds.
-ENTITLEMENTS="$ROOT/Support/Presentify.entitlements"
+ENTITLEMENTS="$ROOT/Support/Overmark.entitlements"
 # An ad-hoc signature gets a designated requirement of `cdhash <hash>`, which
 # changes on every rebuild. macOS keys the Screen Recording and Accessibility
 # permissions on that requirement, so a rebuilt app stops matching the row the

@@ -1,4 +1,4 @@
-# Presentify — Estado del proyecto
+# Overmark — Estado del proyecto
 
 _Fecha: 2026-10-22 · Rama `main` · Estado: **FUNCIONAL** ✅_
 
@@ -61,11 +61,11 @@ presentaciones, sin congelar el escritorio.
 ### Grabación de la presentación
 - **⌘⇧R** o el botón rojo de la barra: graba la presentación completa con
   `SCStream → AVAssetWriter` (.mov H.264/HEVC, 30/60 fps) en
-  `~/Movies/Presentify` (carpeta configurable en General; `"(2)"` si hay colisión).
+  `~/Movies/Overmark` (carpeta configurable en General; `"(2)"` si hay colisión).
 - Micrófono **opcional** (toggle en General → Grabación; pide el permiso recién
   al activarlo; denegado → graba sin sonido y lo avisa).
 - **Pantalla a grabar** elegible (principal o por nombre). El módulo
-  `PresentifyRecorder` escribe todo el display menos las ventanas propias
+  `OvermarkRecorder` escribe todo el display menos las ventanas propias
   (barra, cheatsheet, ajustes, editor): el resto queda en la película.
 - **Objetivo: pantalla completa o una ventana.** En modo ventana el stream
   sigue esa ventana con `SCContentFilter(desktopIndependentWindow:)` y las
@@ -98,7 +98,7 @@ presentaciones, sin congelar el escritorio.
 | Pausar | ⌘⇧S |
 | Deshacer / Rehacer | ⌘⌥Z / ⌘⌥⇧Z |
 | Copiar / Guardar captura | ⌘⇧C / ⌘⌥⇧S |
-| Salir de Presentify | ⌘⌥Q |
+| Salir de Overmark | ⌘⌥Q |
 
 ---
 
@@ -135,14 +135,14 @@ presentaciones, sin congelar el escritorio.
 `swift build` limpio · `swift test` verde: **79** pruebas Swift Testing (13 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
-(PRESENTIFY_PROBE=1) que ejercita el flujo completo headless.
+(OVERMARK_PROBE=1) que ejercita el flujo completo headless.
 
 ## Cómo construir y correr
 
 ```bash
 swift build && swift test
-bash Scripts/build-app.sh          # → build/Presentify.app + build/Presentify.dmg (firma ad-hoc)
-open build/Presentify.app
+bash Scripts/build-app.sh          # → build/Overmark.app + build/Overmark.dmg (firma ad-hoc)
+open build/Overmark.app
 ```
 
 - Firma ad-hoc: cada rebuild puede hacer que macOS **vuelva a pedir** Grabación de

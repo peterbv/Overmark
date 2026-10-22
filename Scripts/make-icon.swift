@@ -1,6 +1,6 @@
 #!/usr/bin/env swift
 
-// Renders the Presentify app icon as a PNG.
+// Renders the Overmark app icon as a PNG.
 //
 // The design reads as a slide being annotated live: a deep indigo stage, a
 // floating white screen carrying two ghosted text bars, a glowing green

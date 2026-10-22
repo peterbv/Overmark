@@ -5,15 +5,15 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>Presentify</string>
+	<string>Overmark</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.presentify.app</string>
+	<string>com.overmark.app</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Presentify</string>
+	<string>Overmark</string>
 	<key>CFBundleDisplayName</key>
-	<string>Presentify</string>
+	<string>Overmark</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -21,7 +21,7 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>CFBundleIconFile</key>
-	<string>Presentify</string>
+	<string>Overmark</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSHighResolutionCapable</key>
@@ -32,9 +32,9 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Presentify does not send Apple events.</string>
+	<string>Overmark does not send Apple events.</string>
 	<!-- Optional: only asked when the user enables "Record the microphone". -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Presentify needs your microphone to record its sound along with the presentation video.</string>
+	<string>Overmark needs your microphone to record its sound along with the presentation video.</string>
 </dict>
 </plist>

@@ -2,65 +2,65 @@
 import PackageDescription
 
 let package = Package(
-    name: "Presentify",
+    name: "Overmark",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Presentify", targets: ["PresentifyApp"]),
-        .library(name: "PresentifyCore", targets: ["PresentifyCore"]),
+        .executable(name: "Overmark", targets: ["OvermarkApp"]),
+        .library(name: "OvermarkCore", targets: ["OvermarkCore"]),
     ],
     dependencies: [
         .package(url: "https://github.com/soffes/HotKey", from: "0.2.1"),
     ],
     targets: [
         // MARK: - Core (no UI, no side effects — fully testable)
-        .target(name: "PresentifyCore"),
+        .target(name: "OvermarkCore"),
 
         // MARK: - Platform services
-        .target(name: "PresentifyCapture", dependencies: ["PresentifyCore"]),
+        .target(name: "OvermarkCapture", dependencies: ["OvermarkCore"]),
         .target(
-            name: "PresentifyRecorder",
-            dependencies: ["PresentifyCore", "PresentifyCapture"]
+            name: "OvermarkRecorder",
+            dependencies: ["OvermarkCore", "OvermarkCapture"]
         ),
         .target(
-            name: "PresentifyHotkeys",
+            name: "OvermarkHotkeys",
             dependencies: [
-                "PresentifyCore",
+                "OvermarkCore",
                 .product(name: "HotKey", package: "HotKey"),
             ]
         ),
         .target(
-            name: "PresentifyCursor",
-            dependencies: ["PresentifyCore", "PresentifyCapture"]
+            name: "OvermarkCursor",
+            dependencies: ["OvermarkCore", "OvermarkCapture"]
         ),
-        .target(name: "PresentifyOverlay", dependencies: ["PresentifyCore", "PresentifyCapture"]),
+        .target(name: "OvermarkOverlay", dependencies: ["OvermarkCore", "OvermarkCapture"]),
 
         // MARK: - App
         .executableTarget(
-            name: "PresentifyApp",
+            name: "OvermarkApp",
             dependencies: [
-                "PresentifyCore",
-                "PresentifyCapture",
-                "PresentifyOverlay",
-                "PresentifyHotkeys",
-                "PresentifyCursor",
-                "PresentifyRecorder",
+                "OvermarkCore",
+                "OvermarkCapture",
+                "OvermarkOverlay",
+                "OvermarkHotkeys",
+                "OvermarkCursor",
+                "OvermarkRecorder",
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
 
         // MARK: - Tests
-        .testTarget(name: "PresentifyCoreTests", dependencies: ["PresentifyCore"]),
+        .testTarget(name: "OvermarkCoreTests", dependencies: ["OvermarkCore"]),
         .testTarget(
-            name: "PresentifyCaptureTests",
-            dependencies: ["PresentifyCapture"]
+            name: "OvermarkCaptureTests",
+            dependencies: ["OvermarkCapture"]
         ),
         .testTarget(
-            name: "PresentifyRecorderTests",
-            dependencies: ["PresentifyRecorder"]
+            name: "OvermarkRecorderTests",
+            dependencies: ["OvermarkRecorder"]
         ),
         .testTarget(
-            name: "PresentifyHotkeysTests",
-            dependencies: ["PresentifyHotkeys"]
+            name: "OvermarkHotkeysTests",
+            dependencies: ["OvermarkHotkeys"]
         ),
     ],
     swiftLanguageModes: [.v6]

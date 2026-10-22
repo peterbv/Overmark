@@ -5,20 +5,20 @@
             "request": "launch",
             "args": [],
             "cwd": "${workspaceFolder:PresentationApp}",
-            "name": "Debug Presentify",
-            "target": "Presentify",
+            "name": "Debug Overmark",
+            "target": "Overmark",
             "configuration": "debug",
-            "preLaunchTask": "swift: Build Debug Presentify"
+            "preLaunchTask": "swift: Build Debug Overmark"
         },
         {
             "type": "swift",
             "request": "launch",
             "args": [],
             "cwd": "${workspaceFolder:PresentationApp}",
-            "name": "Release Presentify",
-            "target": "Presentify",
+            "name": "Release Overmark",
+            "target": "Overmark",
             "configuration": "release",
-            "preLaunchTask": "swift: Build Release Presentify"
+            "preLaunchTask": "swift: Build Release Overmark"
         }
     ]
 }
