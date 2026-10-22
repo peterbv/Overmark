@@ -58,7 +58,7 @@ struct SettingsView: View {
 
             selectedPane
         }
-        .frame(width: 460, height: 440)
+        .frame(width: 560, height: 460)
     }
 
     @ViewBuilder private var selectedPane: some View {
