@@ -94,8 +94,12 @@ public actor PresentationRecorder {
 
         if let windowChoice = configuration.windowChoice {
             // The chosen window sizes the track: its frame at start decides
-            // the encode resolution (a resized window letterboxes instead,
-            // since a running writer cannot change its track size).
+            // the encode resolution. A running writer cannot resize its
+            // track, so the stream scales the window up and down into the
+            // fixed track (`scalesToFit`) and the burn-in reads each
+            // frame's geometry from the stream frame info instead — a
+            // resized window keeps filling the video with its annotations
+            // glued to it.
             let resolved = try await WindowRecordingSource.resolve(
                 windowChoice,
                 cappedPixels: Self.maxEncodePixels

@@ -24,6 +24,10 @@ presentaciones, sin congelar el escritorio.
   - **Atajos configurables**: nueva pestaña Atajos en Preferencias graba la
     combinación nueva (debe incluir ⌘, detecta conflictos), persiste solo los
     overrides y la chuleta de la barra refleja siempre los atajos vivos.
+  - **Grabación por ventana viva**: el track se adopta al arrancar pero el
+    stream reescala el contenido en ambas direcciones y el burn-in sigue la
+    geometría viva por frame — mover o redimensionar la ventana grabada ya
+    no desplaza las anotaciones ni deja bandas de recorte.
 - Superposiciones = **lienzos transparentes** sobre el escritorio vivo: nunca se ve
   una foto estática de la pantalla; las anotaciones se ven en el momento.
 - Modo de clics: por defecto los overlays **dejan pasar los clics** al Mac
@@ -67,10 +71,15 @@ presentaciones, sin congelar el escritorio.
   sigue esa ventana con `SCContentFilter(desktopIndependentWindow:)` y las
   anotaciones se dibujan dentro del video (burn-in con `AnnotationRenderer`;
   la captura de una sola ventana no contendría las capas). El track es de
-  tamaño fijo: redimensionar la ventana encarta la imagen (letterbox). Los
-  efectos dedicados (spotlight/desenfoque/laser) no quedan dibujados en este
-  modo — macOS 15 ofrecería `scalableScreenCaptureIfNeeded` para track
-  variable, anotado como mejora futura.
+  tamaño fijo (un writer vivo no redimensiona pista), pero el stream escala
+  el contenido hacia arriba y abajo (`scalesToFit`, macOS 14+) y el burn-in
+  lee la geometría viva de cada frame (`SCStreamFrameInfo`:
+  `ScreenRect`/`ContentRect`, autocarlibrados contra la geometría del
+  arranque) — las anotaciones siguen pegadas a la ventana aunque la muevan
+  o la redimensionen. Los efectos dedicados (spotlight/desenfoque/laser)
+  no quedan dibujados en este modo. Un track realmente variable exigiría
+  `SCRecordingOutput` (macOS 15), que no entrega frames por callback y
+  con ello ciega el burn-in — descartado en favor del track fijo escalado.
 - Salir (ESC/"Listo"/⌘Q) **finaliza siempre el archivo** — nunca queda corrupto.
   Si la grabación se corta o sale vacía, la barra lo dice en lugar de callar.
 
@@ -118,10 +127,10 @@ presentaciones, sin congelar el escritorio.
     export multimonitor en una sola imagen y atajos configurables con
     persistencia de overrides (nueva pestaña Atajos en Preferencias).
 
-`swift build` limpio · `swift test` verde: **69** pruebas Swift Testing (11 suites) +
-**16** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
-ventana incluida). Cada ronda corre una sonda (PRESENTIFY_PROBE=1) que ejercita
-el flujo completo headless.
+`swift build` limpio · `swift test` verde: **79** pruebas Swift Testing (13 suites) +
+**24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
+ventana y mapeo por frame incluidos). Cada ronda corre una sonda
+(PRESENTIFY_PROBE=1) que ejercita el flujo completo headless.
 
 ## Cómo construir y correr
 
@@ -145,8 +154,10 @@ open build/Presentify.app
 - Sin persistencia de documentos (undo/limpiar + borrado por clic derecho
   cubren lo básico).
 - Lupa ~3fps y solo la pantalla del cursor (extra pantalla queda con snapshot de entrada).
-- Grabación por ventana: no incluye los efectos dedicados y fija el tamaño
-  del video al arrancar (letterbox si la ventana cambia de tamaño después).
+- Grabación por ventana: no incluye los efectos dedicados; el track se fija
+  al arrancar pero el stream reescala el contenido y el burn-in sigue la
+  geometría viva (una ventana que cambia de aspecto puede estirarse
+  levemente — medido, no bandas).
 - Escena `Settings` de SwiftUI muerta (se usa ventana propia) — código vivo pero residual.
 
 ## Si lo subimos a GitHub (checklist para cuando toque)

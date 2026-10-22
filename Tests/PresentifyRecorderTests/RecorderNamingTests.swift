@@ -78,6 +78,149 @@ final class RecorderWindowGeometryTests: XCTestCase {
     }
 }
 
+/// The per-frame mapping the burn-in uses in window recordings: the frame
+/// info the stream attaches is resolved with a candidate ladder calibrated
+/// against the frame the run started with, so the mapping works whatever
+/// units the stream used for its rects.
+final class RecorderFrameMappingTests: XCTestCase {
+    /// The AppKit frame of the window at start, the calibration anchor.
+    private let knownFrame = CGRect(x: 100, y: 850, width: 800, height: 200)
+
+    /// `knownFrame` expressed the way ScreenCaptureKit reports rect values
+    /// (top-left origin, points): the same rect flipped vertically.
+    private var rawPointsRect: CGRect {
+        WindowRecordingSource.appKitFrame(ofWindowFrame: knownFrame)
+    }
+
+    func testScreenRectInPointUnitsResolvesToKnownFrame() {
+        let raw = WindowRecordingSource.appKitFrame(ofWindowFrame: knownFrame)
+        let resolved = WindowRecordingSource.contentFrameAppKit(
+            rawScreenRect: raw,
+            knownFrame: knownFrame,
+            pointPixelScale: 1
+        )
+
+        XCTAssertEqual(resolved.minX, knownFrame.minX, accuracy: 0.001)
+        XCTAssertEqual(resolved.maxY, knownFrame.maxY, accuracy: 0.001)
+        XCTAssertEqual(resolved.width, knownFrame.width, accuracy: 0.001)
+        XCTAssertEqual(resolved.height, knownFrame.height, accuracy: 0.001)
+    }
+
+    func testScreenRectInPixelUnitsResolvesThroughScale() {
+        // The same rect reported at double scale (a 2× surface).
+        let raw = CGRect(
+            x: rawPointsRect.origin.x,
+            y: rawPointsRect.origin.y,
+            width: knownFrame.width * 2,
+            height: knownFrame.height * 2
+        )
+        let resolved = WindowRecordingSource.contentFrameAppKit(
+            rawScreenRect: raw,
+            knownFrame: knownFrame,
+            pointPixelScale: 2
+        )
+
+        XCTAssertEqual(resolved.minX, knownFrame.minX, accuracy: 0.001)
+        XCTAssertEqual(resolved.maxY, knownFrame.maxY, accuracy: 0.001)
+        XCTAssertEqual(resolved.width, knownFrame.width, accuracy: 0.001)
+        XCTAssertEqual(resolved.height, knownFrame.height, accuracy: 0.001)
+    }
+
+    func testContentRectScaledToSurfaceUnitsIsPromoted() {
+        // The stream reports a content rect in surface points while the
+        // buffer is its pixel mirror (2× here): the scaled candidate
+        // matches the buffer, so that is the one used.
+        let raw = CGRect(x: 100, y: 4, width: 800, height: 200)
+        let content = WindowRecordingSource.contentRectInPixels(
+            rawContentRect: raw,
+            bufferSize: CGSize(width: 1600, height: 400),
+            pointPixelScale: 2
+        )
+
+        XCTAssertEqual(content.minX, 200)
+        XCTAssertEqual(content.minY, 8)
+        XCTAssertEqual(content.width, 1600)
+        XCTAssertEqual(content.height, 400)
+    }
+
+    func testContentRectAlreadyInPixelsStaysUntouched() {
+        let raw = CGRect(x: 0, y: 0, width: 1600, height: 400)
+        let content = WindowRecordingSource.contentRectInPixels(
+            rawContentRect: raw,
+            bufferSize: CGSize(width: 1600, height: 400),
+            pointPixelScale: 2
+        )
+
+        XCTAssertEqual(content, raw)
+    }
+
+    func testMissingContentRectFallsBackToFullBuffer() {
+        let content = WindowRecordingSource.contentRectInPixels(
+            rawContentRect: nil,
+            bufferSize: CGSize(width: 1600, height: 400),
+            pointPixelScale: 2
+        )
+
+        XCTAssertEqual(content, CGRect(x: 0, y: 0, width: 1600, height: 400))
+    }
+
+    func testTransformFollowsAResizedWindow() {
+        // The window started as 800×200 and grew to 1600×200 while the
+        // track is fixed: the stream compressed X (800/1600) and stretched
+        // Y (400/200) to keep the content filling the buffer. The
+        // transform must land a global point on the same offset inside
+        // the content — not on the geometry at start.
+        let contentFrame = CGRect(x: 100, y: 850, width: 1600, height: 200)
+        let contentRect = CGRect(x: 0, y: 0, width: 800, height: 400)
+        let transform = WindowRecordingSource.annotationTransform(
+            contentFrame: contentFrame,
+            contentRect: contentRect
+        )
+
+        // A quarter along the window's width (400 points → 200 px at the
+        // 0.5 X factor) and a quarter down its height (50 points from the
+        // top → 100 px at the 2.0 Y factor).
+        let pixel = CGPoint(x: 500, y: 1000).applying(transform)
+        XCTAssertEqual(pixel.x, 200, accuracy: 0.001)
+        XCTAssertEqual(pixel.y, 100, accuracy: 0.001)
+    }
+
+    func testTransformOmitsStaleStartGeometry() {
+        // The mapping must use the measured frame, not the one the run
+        // was started with: a window that moved right keeps its
+        // annotations glued to it.
+        let movedFrame = knownFrame.offsetBy(dx: 400, dy: 0)
+        let transform = WindowRecordingSource.annotationTransform(
+            contentFrame: movedFrame,
+            contentRect: CGRect(x: 0, y: 0, width: 800, height: 400)
+        )
+
+        let pixel = CGPoint(x: movedFrame.minX, y: movedFrame.maxY).applying(transform)
+        XCTAssertEqual(pixel.x, 0, accuracy: 0.001)
+        XCTAssertEqual(pixel.y, 0, accuracy: 0.001)
+    }
+
+    func testRectDistanceRanksNearestCandidate() {
+        let close = knownFrame
+        let far = knownFrame.offsetBy(dx: 4_000, dy: 0)
+        let otherSize = CGRect(x: 100, y: 850, width: 1_600, height: 400)
+
+        XCTAssertEqual(
+            WindowRecordingSource.rectDistanceInAppKit(close, knownFrame: knownFrame),
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertLessThan(
+            WindowRecordingSource.rectDistanceInAppKit(close, knownFrame: knownFrame),
+            WindowRecordingSource.rectDistanceInAppKit(otherSize, knownFrame: knownFrame)
+        )
+        XCTAssertLessThan(
+            WindowRecordingSource.rectDistanceInAppKit(otherSize, knownFrame: knownFrame),
+            WindowRecordingSource.rectDistanceInAppKit(far, knownFrame: knownFrame)
+        )
+    }
+}
+
 final class RecorderSettingsTests: XCTestCase {
     func testClampSnapsIllegalFrameRates() {
         XCTAssertEqual(RecorderSettings(frameRate: 24).clamped().frameRate, 30)
