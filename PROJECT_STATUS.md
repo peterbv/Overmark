@@ -114,7 +114,7 @@ presentaciones, sin congelar el escritorio.
 9. `e3560ba` barra arrastrable de verdad (grip + `performDrag`; el fondo SwiftUI no la movía).
 10. `d465d62` snap a esquinas + auto-ocultar (pestaña) + panel de atajos.
 11. `e8be354` lupa EN VIVO (~3fps) en vez de captura estática.
-12. `9bcda1d` ronda 2026-10-22: borrado por clic derecho, texto multilínea,
+12. `04c8bcf` ronda 2026-10-22: borrado por clic derecho, texto multilínea,
     export multimonitor en una sola imagen y atajos configurables con
     persistencia de overrides (nueva pestaña Atajos en Preferencias).
 
