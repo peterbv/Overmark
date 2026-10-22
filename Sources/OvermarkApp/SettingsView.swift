@@ -5,6 +5,33 @@ import OvermarkCore
 /// The core colour type, aliased to avoid colliding with `SwiftUI.Color`.
 public typealias AnnotationColor = OvermarkCore.Color
 
+/// The tabs of the settings window, in display order.
+///
+/// A plain segmented picker renders a `TabView` as the old classic strip —
+/// in newer macOS versions the SwiftUI `TabView` restyles itself as a
+/// floating navigation tab bar, which is out of place in a small utility
+/// window.
+enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
+    case tools
+    case cursor
+    case general
+    case shortcuts
+    case permissions
+
+    public var id: String { rawValue }
+
+    /// The tab label, in the active language.
+    @MainActor var title: String {
+        switch self {
+        case .tools: L10n.tr("Tools")
+        case .cursor: L10n.tr("Cursor")
+        case .general: L10n.tr("General")
+        case .shortcuts: L10n.tr("Shortcuts")
+        case .permissions: L10n.tr("Permissions")
+        }
+    }
+}
+
 /// The settings window.
 ///
 /// It hosts the tool palette, the colour choices and the cursor effect
@@ -12,24 +39,36 @@ public typealias AnnotationColor = OvermarkCore.Color
 /// pushes the values to the live overlay.
 struct SettingsView: View {
     @ObservedObject var coordinator: AppCoordinator
+    @State private var selectedTab: SettingsTab = .tools
 
     /// Tools whose annotations the renderer actually draws.
     private static let selectableTools = AnnotationTool.allCases.filter { $0.producesAnnotation }
 
     var body: some View {
-        TabView {
-            toolSettings
-                .tabItem { Label(L10n.tr("Tools"), systemImage: "pencil.tip") }
-            cursorSettings
-                .tabItem { Label(L10n.tr("Cursor"), systemImage: "cursorarrow") }
-            generalSettings
-                .tabItem { Label(L10n.tr("General"), systemImage: "globe") }
-            HotKeysSettingsView(coordinator: coordinator)
-                .tabItem { Label(L10n.tr("Shortcuts"), systemImage: "command.square") }
-            permissionSettings
-                .tabItem { Label(L10n.tr("Permissions"), systemImage: "lock.shield") }
+        VStack(spacing: 0) {
+            Picker("", selection: $selectedTab) {
+                ForEach(SettingsTab.allCases) { tab in
+                    Text(tab.title).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+
+            selectedPane
         }
         .frame(width: 460, height: 440)
+    }
+
+    @ViewBuilder private var selectedPane: some View {
+        switch selectedTab {
+        case .tools: toolSettings
+        case .cursor: cursorSettings
+        case .general: generalSettings
+        case .shortcuts: HotKeysSettingsView(coordinator: coordinator)
+        case .permissions: permissionSettings
+        }
     }
 
     // MARK: - Tools
