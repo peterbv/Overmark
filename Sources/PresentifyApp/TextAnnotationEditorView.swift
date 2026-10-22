@@ -5,6 +5,10 @@ import PresentifyCore
 ///
 /// The editor is presented by the coordinator, which owns the AppKit window.
 /// The view only knows about the text and the two ways out: cancel or commit.
+///
+/// Text can span several lines: Return inserts a newline and ⌘Return commits,
+/// so the panel can be driven from the keyboard without losing multi-line
+/// input.
 struct TextAnnotationEditorView: View {
     /// The colour the annotation will use.
     let color: AnnotationColor
@@ -20,10 +24,28 @@ struct TextAnnotationEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField(L10n.tr("Type your text"), text: $text)
-                .textFieldStyle(.roundedBorder)
+            TextEditor(text: $text)
                 .focused($isFocused)
-                .onSubmit(commit)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .background(
+                    Color.secondary.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 8)
+                )
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(L10n.tr("Type your text"))
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 10)
+                            .allowsHitTesting(false)
+                    }
+                }
+
+            Text(L10n.tr("⌘⏎ adds the text · ⏎ adds a new line"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
 
             HStack {
                 Circle()
@@ -43,13 +65,13 @@ struct TextAnnotationEditorView: View {
                     .keyboardShortcut(.cancelAction)
 
                 Button(L10n.tr("Add"), action: commit)
-                    .keyboardShortcut(.defaultAction)
+                    .keyboardShortcut(.return, modifiers: .command)
                     .buttonStyle(.borderedProminent)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(16)
-        .frame(width: 320, height: 110)
+        .frame(width: 380, height: 180)
         .onAppear { isFocused = true }
     }
 

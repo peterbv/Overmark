@@ -98,6 +98,22 @@ public struct AnnotationRenderer: Sendable {
 /// capture does not contain the annotations. Compositing them into the image
 /// is what makes the copied or saved screenshot match what the audience sees.
 public enum AnnotationCompositor {
+    /// One display's capture plus the frame it covers in screen space.
+    ///
+    /// A loose input type the compositor stitches from, so the renderer
+    /// stays independent of the capture service that produces the pieces.
+    public struct DisplayPiece: Sendable {
+        /// The captured screenshot, in device pixels.
+        public let image: CGImage
+        /// The display's frame in AppKit screen space.
+        public let screen: ScreenFrame
+
+        public init(image: CGImage, screen: ScreenFrame) {
+            self.image = image
+            self.screen = screen
+        }
+    }
+
     /// Draws the annotations that fall on a display over its screenshot.
     ///
     /// - Parameters:
@@ -152,5 +168,84 @@ public enum AnnotationCompositor {
 
         guard let result = context.makeImage() else { return image }
         return result
+    }
+
+    /// Composites the annotations over a screenshot of the whole desktop.
+    ///
+    /// A multi-monitor presentation spans one desktop across several
+    /// displays; a screenshot that took only the first display would drop
+    /// whatever the audience sees on the projector. Each display is
+    /// captured (excluding Presentify's own chrome) and annotated on its
+    /// own, then the pieces are stitched at their real positions into the
+    /// bounding rectangle of the desktop.
+    ///
+    /// Layout runs on a pixel grid of the sharpest display, so a Retina
+    /// screen keeps its detail and a lower-resolution display is drawn
+    /// scaled up. Mirrored displays share their frame: they overlap in the
+    /// stitched image and the last capture drawn wins.
+    ///
+    /// - Parameters:
+    ///   - snapshots: One capture per attached display, in any order.
+    ///   - annotations: All annotations, in screen space; each one is drawn
+    ///     only on the display it belongs to.
+    /// - Returns: The stitched desktop image, or `nil` with no snapshots.
+    public static func desktopImage(
+        from snapshots: [DisplayPiece],
+        annotations: [Annotation]
+    ) -> CGImage? {
+        guard !snapshots.isEmpty else { return nil }
+        guard snapshots.count > 1 else {
+            let snapshot = snapshots[0]
+            return composited(
+                image: snapshot.image,
+                annotations: annotations,
+                screen: snapshot.screen
+            )
+        }
+
+        // The bounding rectangle of every display, in AppKit points. Every
+        // point of it is covered by some display, so the stitching leaves
+        // no gaps.
+        var desktop = snapshots[0].screen.frame
+        for snapshot in snapshots.dropFirst() {
+            desktop = desktop.union(snapshot.screen.frame)
+        }
+
+        let scale = snapshots.map { $0.screen.scale }.max() ?? 1
+        guard scale > 0 else { return nil }
+        let width = Int((desktop.size.width * scale).rounded())
+        let height = Int((desktop.size.height * scale).rounded())
+        guard width > 0, height > 0 else { return nil }
+
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
+        ) else { return nil }
+
+        for snapshot in snapshots {
+            let annotated = composited(
+                image: snapshot.image,
+                annotations: annotations,
+                screen: snapshot.screen
+            )
+            let frame = snapshot.screen.frame
+            // AppKit points and Core Graphics points both run bottom-up, so
+            // the piece sits at its own frame, shifted by the desktop's
+            // minimum: the image itself is drawn upright by `draw`.
+            context.draw(annotated, in: CGRect(
+                x: (frame.minX - desktop.minX) * scale,
+                y: (frame.minY - desktop.minY) * scale,
+                width: frame.size.width * scale,
+                height: frame.size.height * scale
+            ))
+        }
+
+        return context.makeImage()
     }
 }

@@ -47,6 +47,21 @@ extension Point {
         return (dx * dx + dy * dy).squareRoot()
     }
 
+    /// The shortest distance from the receiver to a line segment.
+    ///
+    /// Works in both directions along the segment (clamped to its ends), so
+    /// the caller can treat a stroke as a chain of segments without caring
+    /// where a point projects to. A degenerate segment — both ends equal —
+    /// measures as the distance to that end point.
+    public func distance(toSegment start: Point, and end: Point) -> Double {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let lengthSquared = dx * dx + dy * dy
+        guard lengthSquared > 0 else { return distance(to: start) }
+        let t = max(0, min(1, ((x - start.x) * dx + (y - start.y) * dy) / lengthSquared))
+        return distance(to: Point(x: start.x + t * dx, y: start.y + t * dy))
+    }
+
     public func translated(by translation: Vector) -> Point {
         Point(x: x + translation.dx, y: y + translation.dy)
     }

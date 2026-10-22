@@ -24,6 +24,8 @@ struct SettingsView: View {
                 .tabItem { Label(L10n.tr("Cursor"), systemImage: "cursorarrow") }
             generalSettings
                 .tabItem { Label(L10n.tr("General"), systemImage: "globe") }
+            HotKeysSettingsView(coordinator: coordinator)
+                .tabItem { Label(L10n.tr("Shortcuts"), systemImage: "command.square") }
             permissionSettings
                 .tabItem { Label(L10n.tr("Permissions"), systemImage: "lock.shield") }
         }

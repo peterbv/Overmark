@@ -100,6 +100,11 @@ public final class AppCoordinator: ObservableObject {
     /// that were connected or unplugged mid-session.
     @Published public private(set) var screensEpoch = 0
 
+    /// The hot key combinations in effect: the factory defaults merged with
+    /// the user's persisted overrides. Observable for the settings shortcut
+    /// tab and the toolbar cheat-sheet.
+    @Published public private(set) var hotKeyBindings: [HotKeyAction: HotKeyManager.Binding] = [:]
+
     /// Watches the system-wide displays notification.
     private var screensObserver: (any NSObjectProtocol)?
 
@@ -169,10 +174,16 @@ public final class AppCoordinator: ObservableObject {
             },
             onClick: { [weak self] point in
                 self?.handleCanvasClick(at: point)
+            },
+            onAnnotationDelete: { [weak self] annotation in
+                self?.document.remove(id: annotation.id)
             }
         )
 
-        hotKeys.registerDefaults()
+        hotKeyBindings = HotKeyBindingStore.load()
+        for (action, binding) in hotKeyBindings {
+            hotKeys.register(action, binding: binding)
+        }
         permissionService.refresh()
         permissions = permissionService.state
         microphonePermission = permissionService.microphone
@@ -441,6 +452,42 @@ public final class AppCoordinator: ObservableObject {
         UserDefaults.standard.set(data, forKey: presentationScopeKey)
     }
 
+    // MARK: - Hot keys
+
+    /// Applies a new combination to an action, re-registers the global hot
+    /// key and persists the choice.
+    public func updateHotKeyBinding(_ action: HotKeyAction, binding: HotKeyManager.Binding) {
+        var bindings = hotKeyBindings
+        bindings[action] = binding
+        hotKeyBindings = bindings
+        hotKeys.register(action, binding: binding)
+        HotKeyBindingStore.save(bindings)
+    }
+
+    /// Restores one action's factory default and persists it.
+    public func resetHotKeyBinding(_ action: HotKeyAction) {
+        guard let binding = HotKeyManager.defaultBindings[action] else { return }
+        updateHotKeyBinding(action, binding: binding)
+    }
+
+    /// Restores every factory default and persists them.
+    public func resetHotKeyBindings() {
+        hotKeyBindings = HotKeyManager.defaultBindings
+        for (action, binding) in hotKeyBindings {
+            hotKeys.register(action, binding: binding)
+        }
+        HotKeyBindingStore.save(hotKeyBindings)
+    }
+
+    /// The action already bound to a combination, if any, for the settings
+    /// UI to report a conflict before the assignment is applied.
+    public func hotKeyConflict(
+        for binding: HotKeyManager.Binding,
+        excluding action: HotKeyAction
+    ) -> HotKeyAction? {
+        HotKeyManager.conflict(for: binding, in: hotKeyBindings, for: action)
+    }
+
     /// Shows the overlays: a transparent canvas over the live desktop on
     /// the screens the presentation scope allows.
     ///
@@ -510,23 +557,29 @@ public final class AppCoordinator: ObservableObject {
 
     // MARK: - Actions
 
-    /// Captures the screen and returns the resulting image.
+    /// Captures the whole desktop across every attached display and returns
+    /// the resulting image.
     ///
-    /// The annotations are composited on top of the capture, because the
+    /// The annotations are composited on top of the captures, because the
     /// overlay lives in the app's own windows and would not otherwise appear
-    /// in the screenshot.
+    /// in the screenshot. Each display's own marks are drawn on its own
+    /// piece, and the pieces are stitched into the desktop's bounding
+    /// rectangle, so a multi-monitor presentation copies and saves in full —
+    /// not just the first display.
     ///
-    /// Returns `nil` when the capture fails, for example because Screen
-    /// Recording access has not been granted.
-    private func captureCurrentScreenImage() async -> CGImage? {
+    /// Returns `nil` when there is nothing to capture, for example because
+    /// Screen Recording access has not been granted or no display is
+    /// reachable.
+    private func captureDesktopImage() async -> CGImage? {
         guard let snapshots = try? await captureService.captureAllDisplays(),
-              let snapshot = snapshots.first else {
+              !snapshots.isEmpty else {
             return nil
         }
-        return AnnotationCompositor.composited(
-            image: snapshot.image,
-            annotations: document.annotations,
-            screen: snapshot.screen
+        return AnnotationCompositor.desktopImage(
+            from: snapshots.map {
+                AnnotationCompositor.DisplayPiece(image: $0.image, screen: $0.screen)
+            },
+            annotations: document.annotations
         )
     }
 
@@ -570,7 +623,7 @@ public final class AppCoordinator: ObservableObject {
     /// Opens the text editor and adds the resulting annotation.
     private func presentTextEditor(at point: Point) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 110),
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 180),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -644,16 +697,16 @@ public final class AppCoordinator: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let size = Size(
-            width: max(Double(trimmed.count) * 9, 12),
-            height: 20
-        )
         let annotation = Annotation(
             tool: .text,
             color: settings.color,
             lineWidth: settings.lineWidth,
             path: [point],
-            bounds: Rect(origin: point, size: size),
+            bounds: Annotation.textBounds(
+                for: trimmed,
+                lineWidth: settings.lineWidth,
+                origin: point
+            ),
             text: trimmed
         )
         document.add(annotation)
@@ -954,9 +1007,9 @@ public final class AppCoordinator: ObservableObject {
         UserDefaults.standard.set(data, forKey: recorderSettingsKey)
     }
 
-    /// Copies a fresh screenshot of the screen to the clipboard.
+    /// Copies a fresh screenshot of the whole desktop to the clipboard.
     public func copyScreenshot() async {
-        guard let image = await captureCurrentScreenImage() else {
+        guard let image = await captureDesktopImage() else {
             lastError = L10n.tr("Could not capture the screen.")
             return
         }
@@ -968,9 +1021,9 @@ public final class AppCoordinator: ObservableObject {
         pasteboard.writeObjects([NSImage(cgImage: image, size: .zero)])
     }
 
-    /// Saves a fresh screenshot to disk.
+    /// Saves a fresh screenshot of the whole desktop to disk.
     public func saveScreenshot() async {
-        guard let image = await captureCurrentScreenImage() else {
+        guard let image = await captureDesktopImage() else {
             lastError = L10n.tr("Could not capture the screen.")
             return
         }

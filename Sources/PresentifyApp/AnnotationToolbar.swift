@@ -1,5 +1,6 @@
 import AppKit
 import PresentifyCore
+import PresentifyHotkeys
 import PresentifyOverlay
 import SwiftUI
 
@@ -265,7 +266,9 @@ final class AnnotationToolbarController {
         let y = min(max(frame.maxY - size.height, screenFrame.minY), screenFrame.maxY - size.height)
 
         let window = HelpPanel(contentRect: NSRect(origin: NSPoint(x: x, y: y), size: size))
-        window.contentView = NSHostingView(rootView: ShortcutHelpView())
+        window.contentView = NSHostingView(
+            rootView: ShortcutHelpView(bindings: coordinator.hotKeyBindings)
+        )
         window.orderFrontRegardless()
         shortcutsWindow = window
     }
@@ -906,24 +909,16 @@ private final class HelpPanel: NSPanel {
 }
 
 /// The SwiftUI contents of the shortcut cheat-sheet.
+///
+/// The rows come from the coordinator's live bindings, so the sheet always
+/// matches what the user configured in the shortcuts settings tab.
 struct ShortcutHelpView: View {
-    private static let rows: [(String, [String])] = [
-        (L10n.tr("Enter / end the presentation"), ["⌘⇧A"]),
-        (L10n.tr("Pointer highlight"), ["⌘⇧F"]),
-        (L10n.tr("Spotlight"), ["⌘⇧D"]),
-        (L10n.tr("Zoom lens"), ["⌘⇧G"]),
-        (L10n.tr("Record the presentation"), ["⌘⇧R"]),
-        (L10n.tr("Pause"), ["⌘⇧S"]),
-        (L10n.tr("Undo"), ["⌘⌥Z"]),
-        (L10n.tr("Redo"), ["⌘⌥⇧Z"]),
-        (L10n.tr("Copy Screenshot"), ["⌘⇧C"]),
-        (L10n.tr("Save Screenshot…"), ["⌘⌥⇧S"]),
-        (L10n.tr("Quit Presentify"), ["⌘⌥Q"]),
-    ]
+    let bindings: [HotKeyAction: HotKeyManager.Binding]
 
     private static let notes: [(String, String)] = [
         (L10n.tr("ESC always ends the presentation"), "ESC"),
         (L10n.tr("Draw with ⌥ held"), "⌥"),
+        (L10n.tr("Right-click deletes an annotation"), "🖱"),
     ]
 
     var body: some View {
@@ -932,14 +927,14 @@ struct ShortcutHelpView: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(.white)
 
-            ForEach(Self.rows, id: \.0) { name, keys in
-                HStack(spacing: 8) {
-                    Text(name)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.85))
-                    Spacer()
-                    HStack(spacing: 4) {
-                        ForEach(keys, id: \.self) { KeyCap(symbol: $0) }
+            ForEach(HotKeyAction.allCases, id: \.rawValue) { action in
+                if let binding = bindings[action] {
+                    HStack(spacing: 8) {
+                        Text(HotKeyLabels.name(for: action))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white.opacity(0.85))
+                        Spacer()
+                        KeyCap(symbol: binding.readableDescription)
                     }
                 }
             }

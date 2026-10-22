@@ -11,8 +11,19 @@ presentaciones, sin congelar el escritorio.
 ## Qué funciona hoy
 
 ### Núcleo
-- Entrar/salir del modo presentación: **⌘⇧A**, menú de la barra o botón rojo "Listo".
+- Entrar/salir del modo presentación: **⌘⇧A** (configurable en Preferencias → Atajos),
+  menú de la barra o botón rojo "Listo".
   **ESC** termina siempre (salida garantizada).
+- **Novedades de esta ronda**:
+  - **Clic derecho borra la anotación** que está debajo del cursor (sin menú
+    contextual; undo la restaura). Hit-test en el núcleo, probado.
+  - **Texto multilínea** (⏎ salta de línea, ⌘⏎ confirma); bounds y render
+    comparten las mismas constantes de layout.
+  - **Copiar/guardar captura** abraza todo el escritorio multimonitor en una
+    sola imagen compuesta por pantalla.
+  - **Atajos configurables**: nueva pestaña Atajos en Preferencias graba la
+    combinación nueva (debe incluir ⌘, detecta conflictos), persiste solo los
+    overrides y la chuleta de la barra refleja siempre los atajos vivos.
 - Superposiciones = **lienzos transparentes** sobre el escritorio vivo: nunca se ve
   una foto estática de la pantalla; las anotaciones se ven en el momento.
 - Modo de clics: por defecto los overlays **dejan pasar los clics** al Mac
@@ -103,8 +114,11 @@ presentaciones, sin congelar el escritorio.
 9. `e3560ba` barra arrastrable de verdad (grip + `performDrag`; el fondo SwiftUI no la movía).
 10. `d465d62` snap a esquinas + auto-ocultar (pestaña) + panel de atajos.
 11. `e8be354` lupa EN VIVO (~3fps) en vez de captura estática.
+12. `9bcda1d` ronda 2026-10-22: borrado por clic derecho, texto multilínea,
+    export multimonitor en una sola imagen y atajos configurables con
+    persistencia de overrides (nueva pestaña Atajos en Preferencias).
 
-`swift build` limpio · `swift test` verde: **40** pruebas Swift Testing (9 suites) +
+`swift build` limpio · `swift test` verde: **69** pruebas Swift Testing (11 suites) +
 **16** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana incluida). Cada ronda corre una sonda (PRESENTIFY_PROBE=1) que ejercita
 el flujo completo headless.
@@ -126,11 +140,11 @@ open build/Presentify.app
 
 ## Backlog conocido (no bloquea uso)
 
-- Texto: una sóla línea; los bounds guardados no coinciden exactamente con el render.
-- Sin persistencia de documentos ni borrado por clic-derecho (undo/limpiar cubre lo básico).
-- Copiar/guardar usa solo el primer display (multimonitor exporta una sola pantalla).
+- Texto: los bounds guardados siguen siendo aproximados (por diseño: anclan
+  hit-test generoso y el filtro de pantalla, no métricas exactas de glifos).
+- Sin persistencia de documentos (undo/limpiar + borrado por clic derecho
+  cubren lo básico).
 - Lupa ~3fps y solo la pantalla del cursor (extra pantalla queda con snapshot de entrada).
-- Atajos fijos (no configurables por el usuario).
 - Grabación por ventana: no incluye los efectos dedicados y fija el tamaño
   del video al arrancar (letterbox si la ventana cambia de tamaño después).
 - Escena `Settings` de SwiftUI muerta (se usa ventana propia) — código vivo pero residual.

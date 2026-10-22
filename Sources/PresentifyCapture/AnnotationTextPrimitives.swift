@@ -10,15 +10,26 @@ import PresentifyCore
 extension AnnotationRenderer {
     func drawText(_ annotation: Annotation, in context: CGContext) {
         guard let text = annotation.text, !text.isEmpty else { return }
-        let font = CTFontCreateWithName(".SFProDisplay-Bold" as CFString, annotation.lineWidth * 6, nil)
+        let fontSize = annotation.lineWidth * Annotation.textFontFactor
+        let lineHeight = fontSize * Annotation.textLineHeightFactor
+        let font = CTFontCreateWithName(".SFProDisplay-Bold" as CFString, fontSize, nil)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: cgColor(for: annotation.color),
         ]
-        let attributed = NSAttributedString(string: text, attributes: attributes)
-        let line = CTLineCreateWithAttributedString(attributed)
-        context.textPosition = CGPoint(x: annotation.bounds.minX, y: annotation.bounds.minY)
-        CTLineDraw(line, context)
+
+        // Each newline starts a new line. Lines are drawn top to bottom, each
+        // baseline separated by the line height; `0.8` pushes the first line
+        // to sit just under the top edge of the stored bounds so the glyphs
+        // stay inside them.
+        let lines = text.components(separatedBy: .newlines)
+        for (index, lineText) in lines.enumerated() where !lineText.isEmpty {
+            let attributed = NSAttributedString(string: lineText, attributes: attributes)
+            let line = CTLineCreateWithAttributedString(attributed)
+            let baselineY = annotation.bounds.maxY - (CGFloat(index) + 0.8) * lineHeight
+            context.textPosition = CGPoint(x: annotation.bounds.minX, y: baselineY)
+            CTLineDraw(line, context)
+        }
     }
 
     func drawStepNumber(_ annotation: Annotation, in context: CGContext) {

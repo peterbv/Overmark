@@ -59,6 +59,17 @@ public final class HotKeyManager {
             hasher.combine(key)
             hasher.combine(modifiers.rawValue)
         }
+
+        /// A readable rendering of the combination, modifier glyphs first
+        /// ("⌃⌥⇧⌘A"), using the system convention.
+        public var readableDescription: String {
+            var glyphs = ""
+            if modifiers.contains(.control) { glyphs += "⌃" }
+            if modifiers.contains(.option) { glyphs += "⌥" }
+            if modifiers.contains(.shift) { glyphs += "⇧" }
+            if modifiers.contains(.command) { glyphs += "⌘" }
+            return glyphs + key.description
+        }
     }
 
     /// The default key bindings.
@@ -81,6 +92,61 @@ public final class HotKeyManager {
         .saveScreenshot: Binding(key: .s, modifiers: [.command, .shift, .option]),
         .quit: Binding(key: .q, modifiers: [.command, .option]),
     ]
+
+    /// Whether a combination is acceptable for a system-wide hot key.
+    ///
+    /// Bindings are global, so anything that omits `⌘` (or is made of pure
+    /// modifiers alone) would collide with other applications or consume
+    /// keys the presenter cannot reproduce. The default bindings all obey
+    /// this rule, as must the user's custom ones.
+    public static func isAcceptable(_ binding: Binding) -> Bool {
+        binding.modifiers.contains(.command)
+    }
+
+    /// Builds a binding from a key-down event, or nil when the event cannot
+    /// become one.
+    ///
+    /// Pure modifier keys (left/right ⌘⇧⌥⌃, fn, caps lock) carry no binding
+    /// of their own, and any modifier noise outside the four regular flags
+    /// is dropped so a registration never runs with device-dependent bits.
+    public static func binding(fromKeyDown event: NSEvent) -> Binding? {
+        guard !isModifierKeyCode(event.keyCode) else { return nil }
+        guard let key = Key(carbonKeyCode: UInt32(event.keyCode)) else { return nil }
+        let flags = event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .intersection([.command, .shift, .option, .control])
+        return Binding(key: key, modifiers: flags)
+    }
+
+    /// Whether a key code is one of the pure modifier keys (including the
+    /// right-hand variants, fn and caps lock), which carry no binding.
+    public static func isModifierKeyCode(_ keyCode: UInt16) -> Bool {
+        let codes: [UInt16] = [
+            UInt16(kVK_Command), UInt16(kVK_RightCommand),
+            UInt16(kVK_Shift), UInt16(kVK_RightShift),
+            UInt16(kVK_Option), UInt16(kVK_RightOption),
+            UInt16(kVK_Control), UInt16(kVK_RightControl),
+            UInt16(kVK_Function), UInt16(kVK_CapsLock),
+        ]
+        return codes.contains(keyCode)
+    }
+
+    /// The action already bound to a given combination, if any.
+    ///
+    /// Scans in `HotKeyAction.allCases` order rather than dictionary order so
+    /// the reported conflict is deterministic, and skipping `excluded` lets
+    /// the settings UI re-assign an action's own combination safely.
+    public static func conflict(
+        for binding: Binding,
+        in bindings: [HotKeyAction: Binding],
+        for excluded: HotKeyAction
+    ) -> HotKeyAction? {
+        HotKeyAction.allCases.first { action in
+            guard action != excluded else { return false }
+            guard let current = bindings[action] else { return false }
+            return current == binding
+        }
+    }
 
     /// Called when a hot key fires.
     public var onAction: ((HotKeyAction) -> Void)?

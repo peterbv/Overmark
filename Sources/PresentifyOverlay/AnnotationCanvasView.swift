@@ -22,6 +22,9 @@ public final class AnnotationCanvasView: NSView {
     public var onDragEnded: ((Point) -> Void)?
     /// Called when the user clicks without dragging.
     public var onClick: ((Point) -> Void)?
+    /// Called when the user right-clicks an existing annotation asking to
+    /// delete it.
+    public var onAnnotationDelete: ((Annotation) -> Void)?
 
     // MARK: - State
 
@@ -192,6 +195,28 @@ public final class AnnotationCanvasView: NSView {
         dragPoints = []
         mouseDownPoint = nil
         needsDisplay = true
+    }
+
+    // MARK: - Right-click deletion
+
+    /// Deletes the annotation under a right-click, if any.
+    ///
+    /// A right-click with no annotation underneath is a no-op on purpose:
+    /// no context menus while presenting, and the click never falls to the
+    /// app underneath (the panels are not mouse-transparent then, either).
+    /// In hold-⌥ mode the panels only accept events while ⌥ is held, so this
+    /// fires with ⌥ only — the same gate drawing has, keeping both gestures
+    /// consistent.
+    public override func rightMouseDown(with event: NSEvent) {
+        guard isInteractionEnabled else { return }
+        let point = screenPoint(from: event)
+        guard let annotation = Annotation.annotation(
+            at: point,
+            in: annotations,
+            fillsShapes: fillsShapes,
+            on: screen
+        ) else { return }
+        onAnnotationDelete?(annotation)
     }
 
     // MARK: - Hit testing

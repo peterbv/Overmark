@@ -76,8 +76,17 @@ public enum L10n {
         "Auto-hide": "Auto-ocultar",
         "Show the controls": "Mostrar los controles",
         "Keyboard shortcuts": "Atajos de teclado",
+        "Shortcuts": "Atajos",
+        "Change": "Cambiar",
+        "Press a new combination…": "Presioná una nueva combinación…",
+        "The combination must include ⌘": "La combinación debe incluir ⌘",
+        "The combination must include ⌘. ESC cancels the capture.":
+            "La combinación debe incluir ⌘. ESC cancela la captura.",
+        "Already used by %@": "Ya la usa %@",
+        "Reset shortcuts": "Restaurar atajos",
         "Enter / end the presentation": "Entrar / terminar la presentación",
         "ESC always ends the presentation": "ESC siempre termina la presentación",
+        "Right-click deletes an annotation": "Clic derecho borra una anotación",
         "The overlay captures every click until Accessibility is granted (System Settings → Privacy & security → Accessibility). Press here to open it.":
             "El overlay captura todos los clics hasta que concedas Accesibilidad (Ajustes del Sistema → Privacidad y seguridad → Accesibilidad). Toca aquí para abrirla.",
         "While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath.":
@@ -201,6 +210,7 @@ public enum L10n {
         // Text annotation editor.
         "Add Text": "Añadir texto",
         "Type your text": "Escribe tu texto",
+        "⌘⏎ adds the text · ⏎ adds a new line": "⌘⏎ añade el texto · ⏎ añade una línea",
         "Size": "Tamaño",
         "Cancel": "Cancelar",
         "Add": "Añadir",
