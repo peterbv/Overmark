@@ -9,6 +9,10 @@
 
 - Herramientas: lápiz, marcador, flecha, rectángulo, elipse, texto
   (edición in-situ), números de pasos — con color, grosor y trazo degradado.
+- **Persistencia de documentos**: autoguardado con debounce + flush al
+  salir/terminar; pestaña Documentos para guardar con nombre, restaurar o
+  eliminar (archivos JSON atómicos por `SessionArchive`, tolerantes a
+  corrupción).
 - Auto-borrado de trazos dibujados con tiempo configurable.
 - Efectos de cursor: anillo (círculo/squircle/rombo), ripples de clic,
   spotlight, lupa, zoom — configurables y persistidos.
@@ -20,13 +24,13 @@
   la barra; recuperación automática cuando Accesibilidad vuelve.
 - Capturas multi-monitor (copiar / guardar), grabación de ventana en vivo
   (burn-in de anotaciones), DMG firmado ad-hoc.
-- 95 tests (16 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
+- 105 tests (17 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
 
 ## 1. Funciones nuevas (mayor valor)
 
 | # | Idea | Prioridad | Estado | Notas |
 |---|---|---|---|---|
-| 1 | **Persistencia de documentos de anotación** | Alta | Propuesto | Hoy todo se pierde al cerrar la sesión (solo hay undo/limpiar/borrado por clic derecho). Autosave por documento + lista para retomar. |
+| 1 | **Persistencia de documentos de anotación** | Alta | **Hecho** | Autosave por documento + lista para retomar (pestaña Documentos). Undo/limpiar/borrado por clic derecho intactos. |
 | 2 | **Pizarra dedicada** | Alta | Propuesto | Pantalla blanca completa para anotar sin contenido debajo, además del overlay sobre apps. |
 | 3 | **Lupa configurable** | Media | Propuesto | Limitada: ~3 fps y solo la pantalla del cursor (pantalla extra queda con snapshot de entrada). Ajustar tamaño, zoom, fps; opción de espejo en segunda pantalla. |
 | 4 | **Grabación con efectos de cursor incrustados** | Media | Propuesto | La grabación por ventana quema las anotaciones pero no los efectos dedicados (anillo/ripples/lupa); hacer que vayan dentro del video. |
@@ -68,6 +72,16 @@
 
 ## Registro de decisiones
 
+- **22 oct 2026** — **#1 hecho: persistencia de documentos.** Nuevo
+  `SessionArchive` en el núcleo (`SessionSnapshot` v1 = anotaciones + layout
+  de pantallas + fecha; directorio `Application Support/Overmark/Documents`)
+  con autosave.json dedicado y documentos con nombre; el coordinator lo
+  restaura al arrancar, autoguarda con debounce de 0,6 s y flushea al salir
+  del modo o terminar la app. Preferencias gana una pestaña **Documentos**
+  (guardar con nombre vía diálogo, lista con restaurar/eliminar). El undo
+  sigue siendo de sesión — guardado y reabrir re-crea el documento sin
+  historial. Validado end-to-end inyectando un autosave sintético y
+  arrancando el probe (restaura y re-persiste). Test suite en 105 + 24.
 - **22 oct 2026** — Se crea el documento tras la ronda de pulido de
   interacción (`92e956a` passthrough auto-recuperable, `5946ea2` chip
   "captura todo" visible, `2006026` icono de óvalo). Prioridad sugerida en

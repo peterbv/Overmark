@@ -15,6 +15,12 @@ presentaciones, sin congelar el escritorio.
   menú de la barra o botón rojo "Listo".
   **ESC** termina siempre (salida garantizada).
 - **Novedades de esta ronda**:
+  - **Persistencia de documentos**: lo dibujado queda en un autoguardado
+    (debounce 0,6 s + flush al salir/terminar) y reaparece al volver a
+    abrir Overmark; la nueva pestaña **Documentos** en Preferencias guarda
+    la sesión con nombre, la restaura o la elimina de una lista. Nombres
+    saneados y sin colisiones; archivos corruptos se
+    descartan sin ruido.
   - **Clic derecho borra la anotación** que está debajo del cursor (sin menú
     contextual; undo la restaura). Hit-test en el núcleo, probado.
   - **Texto multilínea** (⏎ salta de línea, ⌘⏎ confirma); bounds y render
@@ -176,8 +182,15 @@ presentaciones, sin congelar el escritorio.
     persistidos (blob JSON tolerante a corrupción), trazo degradado en 8
     tramos, favoritos de color vía `NSColorWell` + panel del sistema y
     relleno por figura (export/grabación fieles al canvas).
+17. `eac4273` persistencia de documentos: `SessionArchive` en el núcleo
+    (snapshot v1 con anotaciones + layout de pantallas + fecha; JSON
+    atómicos en `Application Support/Overmark/Documents`), autosave.json
+    propio (debounce 0,6 s en el coordinator, flush al salir del modo y
+    al terminar la app, borrado si el lienzo queda vacío) y restauración
+    al arrancar; pestaña **Documentos** en Preferencias con guardar con
+    nombre, restaurar y eliminar; 10 tests nuevos del archivo de sesión.
 
-`swift build` limpio · `swift test` verde: **95** pruebas Swift Testing (16 suites) +
+`swift build` limpio · `swift test` verde: **105** pruebas Swift Testing (17 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
@@ -204,8 +217,9 @@ open build/Overmark.app
 
 - Texto: los bounds guardados siguen siendo aproximados (por diseño: anclan
   hit-test generoso y el filtro de pantalla, no métricas exactas de glifos).
-- Sin persistencia de documentos (undo/limpiar + borrado por clic derecho
-  cubren lo básico).
+- El autoguardado guarda solo lo dibujado (anotaciones); el undo/redo sigue
+  siendo de sesión. Restaurar con otro layout de pantallas funciona por las
+  coordenadas globales, pero las anotaciones pueden quedar fuera de vista.
 - Lupa ~3fps y solo la pantalla del cursor (extra pantalla queda con snapshot de entrada).
 - Grabación por ventana: no incluye los efectos dedicados; el track se fija
   al arrancar pero el stream reescala el contenido y el burn-in sigue la
