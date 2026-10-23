@@ -107,6 +107,7 @@ public final class AppCoordinator: ObservableObject {
             PreferencesStore.save(cursorEffects)
             updateClickMonitor()
             Task { await effectController.apply(effects: cursorEffects) }
+            recordingEffects.updateEffects(cursorEffects)
         }
     }
 
@@ -193,6 +194,10 @@ public final class AppCoordinator: ObservableObject {
     /// queue cannot touch it directly, so changes are posted to this box
     /// and the burn-in reads the latest set under a lock.
     private let recordingAnnotations = RecordingAnnotationBox()
+    /// Burn-in feed for cursor effects (ring, spotlight, lens, ripples) in
+    /// window recordings. Updated alongside the on-screen effects and fed to
+    /// the recorder at start.
+    private let recordingEffects = CursorEffectBox()
     /// The text editor window; excluded from recordings like the other chrome.
     private var textEditorWindow: NSWindow?
     /// The floating control bar shown while annotating.
@@ -256,8 +261,12 @@ public final class AppCoordinator: ObservableObject {
 
         // The pointer position drives the cursor effects. The tracker only
         // runs while the Accessibility permission is granted.
+        // didSet observers do not fire during init, so the fresh burn-in
+        // box gets the stored effect settings explicitly too.
+        recordingEffects.updateEffects(cursorEffects)
         cursorTracker.onMove = { [weak self] point in
             self?.effectController.updateCursorLocation(point)
+            self?.recordingEffects.updateCursor(point)
         }
 
         updateClickMonitor()
@@ -933,10 +942,10 @@ public final class AppCoordinator: ObservableObject {
             x: Double(NSEvent.mouseLocation.x),
             y: Double(NSEvent.mouseLocation.y)
         )
-        effectController.triggerClick(
-            point: point,
-            isRight: event.type == .rightMouseDown
-        )
+        let isRight = event.type == .rightMouseDown
+        effectController.triggerClick(point: point, isRight: isRight)
+        let click = CursorClick(point: point, isRight: isRight)
+        recordingEffects.appendClick(click)
     }
 
     /// Drops both click monitors.
@@ -1247,6 +1256,9 @@ public final class AppCoordinator: ObservableObject {
             windowChoice: settings.target == .window ? settings.windowChoice : nil,
             annotationsProvider: { [recordingAnnotations] in
                 recordingAnnotations.current()
+            },
+            effectsProvider: { [recordingEffects] in
+                recordingEffects.current()
             }
         )
 

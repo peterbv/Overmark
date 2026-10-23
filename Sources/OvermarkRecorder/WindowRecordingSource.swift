@@ -43,6 +43,10 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
     /// continue while the recording runs). The app layer owns the store;
     /// reading it here costs a lock, not a copy of the document.
     private let annotationsProvider: @Sendable () -> [Annotation]
+    /// The cursor-effect state to burn in, read fresh for every frame.
+    /// `nil` results skip the effect pass; the frame still carries burned
+    /// annotations when it has any.
+    private let effectsProvider: @Sendable () -> CursorEffectFrame?
     /// The window frame the current frames were generated against, in the
     /// annotation space (AppKit screen coordinates, points).
     private var windowFrame: CGRect
@@ -54,10 +58,12 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
     init(
         pipeline: RecorderPipeline,
         annotationsProvider: @escaping @Sendable () -> [Annotation],
+        effectsProvider: @escaping @Sendable () -> CursorEffectFrame? = { nil },
         windowFrame: CGRect
     ) {
         self.pipeline = pipeline
         self.annotationsProvider = annotationsProvider
+        self.effectsProvider = effectsProvider
         self.windowFrame = windowFrame
         super.init()
     }
@@ -385,7 +391,7 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
                 height: CVPixelBufferGetHeight(pixelBuffer)
             )
         )
-        drawAnnotations(onto: pixelBuffer, geometry: geometry)
+        drawContent(onto: pixelBuffer, geometry: geometry)
         pipeline.appendScreenFrame(
             pixelBuffer,
             presentationTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
@@ -402,9 +408,10 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
         pipeline.note(streamFailure: error)
     }
 
-    // MARK: - Annotation burn-in
+    // MARK: - Content burn-in
 
-    /// Draws the current annotations straight into the frame's pixel memory.
+    /// Draws the current annotations and cursor effects straight into the
+    /// frame's pixel memory.
     ///
     /// The frames the encoder expects are top-down, while a `CGContext` over
     /// the same memory is bottom-up, so the mapping folds into one matrix:
@@ -415,9 +422,17 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
     /// is the part of the buffer the content occupies. Resizes therefore
     /// morph the burned-in annotations with the window instead of fixing
     /// them to the geometry at start.
-    private func drawAnnotations(onto pixelBuffer: CVPixelBuffer, geometry: FrameGeometry?) {
+    ///
+    /// Cursor effects are painted with the same matrix, in AppKit screen
+    /// space, so they land where they float on the screen. The lens burns a
+    /// *clean* snapshot taken before annotations land, mirroring the
+    /// on-screen lens which excludes the overlay windows from its capture.
+    private func drawContent(onto pixelBuffer: CVPixelBuffer, geometry: FrameGeometry?) {
         let annotations = annotationsProvider()
-        guard !annotations.isEmpty else { return }
+        let effectFrame = effectsProvider().flatMap {
+            $0.hasBurnableContent ? $0 : nil
+        }
+        guard !annotations.isEmpty || effectFrame != nil else { return }
 
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
@@ -453,22 +468,127 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
                 | CGBitmapInfo.byteOrder32Little.rawValue
         ) else { return }
 
+        // The window content alone, before anything is burned in: the zoom
+        // lens magnifies un-annotated pixels, like it does on-screen.
+        let cleanSnapshot: CGImage? = effectFrame?.effects.isZoomEnabled == true
+            ? context.makeImage()
+            : nil
+
         let windowRect = Rect(
             origin: Point(x: contentFrame.minX, y: contentFrame.minY),
             size: Size(width: contentFrame.width, height: contentFrame.height)
         )
+        let transform = Self.annotationTransform(contentFrame: contentFrame, contentRect: content)
+
+        // Annotations first: they belong to the content, effects float on
+        // top of them, exactly like the composed screen does on the canvas.
         let relevant = annotations.filter {
             windowRect.contains($0.bounds.center)
         }
-        guard !relevant.isEmpty else { return }
+        if !relevant.isEmpty {
+            context.saveGState()
+            context.concatenate(transform)
+            let renderer = AnnotationRenderer(style: .init(scale: 1))
+            for annotation in relevant {
+                renderer.draw(annotation, in: context)
+            }
+            context.restoreGState()
+        }
 
-        context.concatenate(
-            Self.annotationTransform(contentFrame: contentFrame, contentRect: content)
+        guard let effectFrame else { return }
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.concatenate(transform)
+
+        // Effects paint in AppKit screen space (window coordinates resolve
+        // through the same matrix annotation spots do). The pointer effects
+        // follow the pointer, which lives on exactly one display — like the
+        // on-screen windows, only the display hosting the cursor punches a
+        // hole, magnifies or rings.
+        let cursorCGPoint = effectFrame.cursor.map { CGPoint(x: $0.x, y: $0.y) }
+        let windowCGRect = CGRect(
+            x: contentFrame.minX,
+            y: contentFrame.minY,
+            width: contentFrame.width,
+            height: contentFrame.height
         )
+        let isCursorHere = cursorCGPoint.map { windowCGRect.contains($0) } ?? false
 
-        let renderer = AnnotationRenderer(style: .init(scale: 1))
-        for annotation in relevant {
-            renderer.draw(annotation, in: context)
+        if effectFrame.effects.isSpotlightEnabled {
+            CursorEffectRenderer.drawSpotlight(
+                dimRect: CGRect(
+                    x: contentFrame.minX,
+                    y: contentFrame.minY,
+                    width: contentFrame.width,
+                    height: contentFrame.height
+                ),
+                holeCenter: isCursorHere ? cursorCGPoint : nil,
+                holeRadius: effectFrame.effects.spotlightRadius,
+                dimOpacity: effectFrame.effects.spotlightDimOpacity,
+                in: context
+            )
+        }
+
+        if effectFrame.effects.isZoomEnabled, isCursorHere, let cursor = cursorCGPoint, let clean = cleanSnapshot {
+            CursorEffectRenderer.drawZoomLens(
+                at: cursor,
+                around: CGPoint(
+                    x: cursor.x - contentFrame.minX,
+                    y: cursor.y - contentFrame.minY
+                ),
+                size: effectFrame.effects.zoomSize,
+                zoomFactor: effectFrame.effects.zoomFactor,
+                shape: effectFrame.effects.zoomShape,
+                background: clean,
+                contentOriginInPixels: CGPoint(
+                    x: content.minX,
+                    y: content.minY
+                ),
+                pixelsPerPointX: content.width / contentFrame.width,
+                pixelsPerPointY: content.height / contentFrame.height,
+                pointHeight: contentFrame.height,
+                in: context
+            )
+        }
+
+        if effectFrame.effects.isHighlightEnabled, isCursorHere, let cursor = cursorCGPoint {
+            CursorEffectRenderer.drawHighlight(
+                center: cursor,
+                radius: effectFrame.effects.highlightRadius,
+                color: effectFrame.effects.highlightColor,
+                shape: effectFrame.effects.highlightShape,
+                borderWidth: effectFrame.effects.highlightBorderWidth,
+                fillOpacity: effectFrame.effects.highlightFillOpacity,
+                in: context
+            )
+        }
+
+        if !effectFrame.clicks.isEmpty {
+            let now = Date()
+            // The ripple may spill past the window edge, hence the
+            // generous margin: a click just outside the window still shows
+            // through as a partial arc, on screen and on tape alike.
+            let margin = effectFrame.effects.highlightRadius * 2
+            let rippleRect = CGRect(
+                x: contentFrame.minX - margin,
+                y: contentFrame.minY - margin,
+                width: contentFrame.width + margin * 2,
+                height: contentFrame.height + margin * 2
+            )
+            for click in effectFrame.clicks {
+                let center = CGPoint(x: click.point.x, y: click.point.y)
+                guard rippleRect.contains(center) else { continue }
+                CursorEffectRenderer.drawRipple(
+                    center: center,
+                    startedAt: click.startedAt,
+                    at: now,
+                    color: effectFrame.effects.highlightColor,
+                    highlightRadius: effectFrame.effects.highlightRadius,
+                    highlightBorderWidth: effectFrame.effects.highlightBorderWidth,
+                    isRight: click.isRight,
+                    in: context
+                )
+            }
         }
     }
 

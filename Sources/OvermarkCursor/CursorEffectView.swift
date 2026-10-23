@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import OvermarkCapture
 import OvermarkCore
 
 /// One click's ripple animation: where it happened and which button.
@@ -66,7 +67,10 @@ public final class CursorEffectView: NSView {
     }
 
     /// How long one click ripple plays, in seconds.
-    static let pulseDuration: TimeInterval = 0.45
+    ///
+    /// Kept equal to the renderer's constant so on-screen ripples and burned
+    /// ripples never drift apart.
+    static let pulseDuration: TimeInterval = CursorEffectRenderer.rippleDuration
 
     /// The 60 fps ticker that keeps redrawing while a ripple plays.
     private var pulseTicker: Timer?
@@ -107,7 +111,15 @@ public final class CursorEffectView: NSView {
             cursor.y >= bounds.minY - 1 && cursor.y <= bounds.maxY + 1
 
         if effects.isSpotlightEnabled {
-            drawSpotlight(cursor: cursor, punchesHole: isCursorHere, in: context)
+            // Even-odd clip: works on-screen (transparent window) and on the
+            // opaque buffers the window recorder burns into.
+            CursorEffectRenderer.drawSpotlight(
+                dimRect: bounds,
+                holeCenter: isCursorHere ? CGPoint(x: cursor.x, y: cursor.y) : nil,
+                holeRadius: effects.spotlightRadius,
+                dimOpacity: effects.spotlightDimOpacity,
+                in: context
+            )
         }
         if effects.isZoomEnabled && isCursorHere {
             drawZoomLens(cursor: cursor, in: context)
@@ -180,37 +192,5 @@ public final class CursorEffectView: NSView {
     private func stopPulseTicker() {
         pulseTicker?.invalidate()
         pulseTicker = nil
-    }
-
-    // MARK: - Effects
-
-    /// Dims the screen except for a circle around the pointer.
-    ///
-    /// On the display the pointer is on, the dimming layer punches a clean
-    /// hole around the pointer. Displays without the pointer stay uniformly
-    /// dimmed.
-    private func drawSpotlight(cursor: Point, punchesHole: Bool, in context: CGContext) {
-        context.saveGState()
-        defer { context.restoreGState() }
-
-        context.setFillColor(CGColor(
-            red: 0, green: 0, blue: 0,
-            alpha: effects.spotlightDimOpacity
-        ))
-        context.fill(bounds)
-
-        guard punchesHole else { return }
-
-        // Punch the spotlight out of the dimming layer, so the app below shows
-        // through the hole.
-        context.setBlendMode(.clear)
-        let radius = effects.spotlightRadius
-        context.fillEllipse(in: CGRect(
-            x: cursor.x - radius,
-            y: cursor.y - radius,
-            width: radius * 2,
-            height: radius * 2
-        ))
-        context.setBlendMode(.normal)
     }
 }

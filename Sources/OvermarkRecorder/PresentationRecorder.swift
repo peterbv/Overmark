@@ -32,6 +32,11 @@ public actor PresentationRecorder {
         /// The display recording does not need it: the overlay windows are
         /// on tape by themselves.
         public var annotationsProvider: @Sendable () -> [Annotation]
+        /// The cursor-effect state to burn in for window recordings (ring,
+        /// spotlight, lens, ripples), read fresh every frame. Return `nil` to
+        /// skip the burn entirely; display recordings leave it unset because
+        /// their effect windows are on tape by themselves.
+        public var effectsProvider: @Sendable () -> CursorEffectFrame?
 
         public init(
             displayID: CGDirectDisplayID,
@@ -39,7 +44,8 @@ public actor PresentationRecorder {
             settings: RecorderSettings,
             destinationFolder: URL,
             windowChoice: RecordingWindowChoice? = nil,
-            annotationsProvider: @escaping @Sendable () -> [Annotation] = { [] }
+            annotationsProvider: @escaping @Sendable () -> [Annotation] = { [] },
+            effectsProvider: @escaping @Sendable () -> CursorEffectFrame? = { nil }
         ) {
             self.displayID = displayID
             self.excludedWindowNumbers = excludedWindowNumbers
@@ -47,6 +53,7 @@ public actor PresentationRecorder {
             self.destinationFolder = destinationFolder
             self.windowChoice = windowChoice
             self.annotationsProvider = annotationsProvider
+            self.effectsProvider = effectsProvider
         }
     }
 
@@ -115,6 +122,7 @@ public actor PresentationRecorder {
             let window = WindowRecordingSource(
                 pipeline: freshPipeline,
                 annotationsProvider: configuration.annotationsProvider,
+                effectsProvider: configuration.effectsProvider,
                 windowFrame: resolved.appKitFrame
             )
             try await window.start(resolved, frameRate: configuration.settings.frameRate)
