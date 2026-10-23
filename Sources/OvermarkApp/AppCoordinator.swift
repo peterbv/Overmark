@@ -42,6 +42,15 @@ public final class AppCoordinator: ObservableObject {
     /// Documents saved to the archive, newest first.
     @Published public private(set) var savedDocuments: [SessionArchive.Entry] = []
 
+    /// The lowest step number that the next stamp must respect.
+    ///
+    /// Auto-erase can remove a stamp that holds the highest issued number;
+    /// the document keeps its counter derived from what is present, so
+    /// without this floor the next stamp would reuse a number that already
+    /// faded on screen. Fades raise the floor; clearing the canvas or
+    /// restoring a saved document resets it, restarting the numbering.
+    private var stepNumberFloor = 0
+
     /// Whether the dedicated whiteboard is currently covering the screens.
     ///
     /// The board is an overlay state inside the running session, not a
@@ -425,6 +434,8 @@ public final class AppCoordinator: ObservableObject {
 
     /// Puts a saved document back on the canvas.
     public func restoreSavedDocument(_ entry: SessionArchive.Entry) {
+        // The restored stamps define the counter from their own numbers.
+        stepNumberFloor = 0
         document = AnnotationDocument(annotations: entry.snapshot.annotations)
         // The step counter follows the restored annotations.
         syncStepNumber()
@@ -777,6 +788,8 @@ public final class AppCoordinator: ObservableObject {
 
     /// Removes every annotation.
     public func clearAll() {
+        // A manual clear is a fresh canvas: restart the numbering too.
+        stepNumberFloor = 0
         document.removeAll()
     }
 
@@ -1036,10 +1049,11 @@ public final class AppCoordinator: ObservableObject {
     /// Keeps the step counter in sync with the document.
     ///
     /// The number is derived from the annotations that are present, so undoing
-    /// or clearing annotations also rewinds the counter. This keeps the
-    /// settings view and the canvas in agreement.
+    /// or clearing annotations also rewinds the counter. The floor from the
+    /// auto-erase timer keeps a stamp number from being reused after its
+    /// annotation faded away (see `stepNumberFloor`).
     private func syncStepNumber() {
-        let next = document.nextStepNumber
+        let next = max(document.nextStepNumber, stepNumberFloor)
         guard settings.nextStepNumber != next else { return }
         settings.nextStepNumber = next
     }
@@ -1093,8 +1107,9 @@ public final class AppCoordinator: ObservableObject {
     /// Fades an annotation away after the configured delay.
     ///
     /// The delay is read once, when the annotation is created: changing the
-    /// setting later only affects annotations drawn afterwards. Step
-    /// numbers are excluded from the timer entirely (see `isFadeable`).
+    /// setting later only affects annotations drawn afterwards. All drawn
+    /// instruments fade, stamps included (`isFadeable`); the coordinator
+    /// keeps the step counter ahead of the stamps that already faded.
     private func scheduleAutoFade(_ annotation: Annotation) {
         guard settings.autoFadeSeconds > 0, annotation.isFadeable else { return }
         let id = annotation.id
@@ -1128,6 +1143,13 @@ public final class AppCoordinator: ObservableObject {
                 try? await Task.sleep(nanoseconds: 120_000_000)
             }
             guard let self, self.settings.autoFadeSeconds > 0 else { return }
+            // Capture the stamp before it leaves the document: fades can
+            // remove the stamp holding the highest issued number, and the
+            // floor keeps the counter from reissuing that number later.
+            let removee = self.document.annotations.first { $0.id == id }
+            if let removee, removee.tool == .stepNumber {
+                self.stepNumberFloor = max(self.stepNumberFloor, (removee.stepNumber ?? 0) + 1)
+            }
             self.document.remove(id: id, recordHistory: false)
         }
     }

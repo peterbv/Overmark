@@ -177,7 +177,7 @@ public enum L10n {
         "Auto-erase": "Auto-borrado",
         "Fade drawings away on their own": "Los trazos se desvanecen solos",
         "Fade delay": "Retardo del desvanecido",
-        "Drawings disappear on their own after this long. Step numbers never fade.": "Los trazos desaparecen solos tras este tiempo. Los números de paso nunca se desvanecen.",
+        "Drawings disappear on their own after this long.": "Los trazos desaparecen solos tras este tiempo.",
         "Hole size": "Tamaño del agujero",
         "Dimming": "Atenuación",
         "Spotlight": "Foco de luz",

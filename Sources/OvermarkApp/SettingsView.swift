@@ -164,7 +164,7 @@ struct SettingsView: View {
                         Text("60s")
                     }
 
-                    Text(L10n.tr("Drawings disappear on their own after this long. Step numbers never fade."))
+                    Text(L10n.tr("Drawings disappear on their own after this long."))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

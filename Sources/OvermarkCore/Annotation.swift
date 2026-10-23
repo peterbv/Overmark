@@ -375,11 +375,15 @@ public extension Annotation {
 
     /// Whether the auto-erase timer applies to this annotation.
     ///
-    /// Everything drawn fades away on its own when the timer is on; step
-    /// numbers are structural stamps ("step 2") that anchor a narrative, so
-    /// they stay until cleared or deleted manually.
+    /// Everything drawn or stamped fades away on its own when the timer is
+    /// on — step-number stamps included. The coordinator keeps the step
+    /// counter ahead of what has already faded, so a number is never shown
+    /// for a second time until the canvas is cleared or a document is
+    /// restored (see `AppCoordinator.syncStepNumber`). The dedicated effect
+    /// tools (laser pointer, blur, spotlight) never reach the document, so
+    /// they stay out of the timer by construction.
     var isFadeable: Bool {
-        tool.producesAnnotation && tool != .stepNumber
+        tool.producesAnnotation
     }
 }
 

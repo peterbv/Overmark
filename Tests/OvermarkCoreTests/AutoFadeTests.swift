@@ -25,18 +25,18 @@ struct AutoFadeTests {
         return annotation
     }
 
-    @Test("Step numbers are excluded from the fade timer")
-    func stepNumbersNeverFade() {
+    @Test("Stamps fade with the timer; effect tools never reach it")
+    func fadeableAnnotations() {
         #expect(makeAnnotation(.pen).isFadeable)
         #expect(makeAnnotation(.rectangle).isFadeable)
         #expect(makeAnnotation(.ellipse).isFadeable)
         #expect(makeAnnotation(.text).isFadeable)
+        #expect(makeAnnotation(.stepNumber).isFadeable)
         #expect(makeAnnotation(.highlighter).isFadeable)
         #expect(makeAnnotation(.arrow).isFadeable)
         #expect(makeAnnotation(.line).isFadeable)
 
-        #expect(!makeAnnotation(.stepNumber).isFadeable)
-        //_annotations that never reach the document in the first place
+        // Effect tools never reach the document in the first place.
         #expect(!makeAnnotation(.laserPointer).isFadeable)
         #expect(!makeAnnotation(.blur).isFadeable)
         #expect(!makeAnnotation(.spotlight).isFadeable)
