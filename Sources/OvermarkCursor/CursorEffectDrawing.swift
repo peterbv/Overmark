@@ -10,7 +10,7 @@ import OvermarkCore
 /// painting itself lives in `CursorEffectRenderer` so the window recorder can
 /// burn identical effects into recorded frames.
 extension CursorEffectView {
-    /// Draws a magnified lens showing the pixels under the pointer.
+    /// Draws a magnified lens showing the pixels around the pointer.
     ///
     /// The lens shows a *crop* of the screenshot around the pointer,
     /// magnified by `zoomFactor`. Drawing the whole screenshot into the lens
@@ -18,22 +18,35 @@ extension CursorEffectView {
     /// magnification of the area the user is pointing at.
     ///
     /// On-screen the screenshot covers the whole view, so the content maps
-    /// one-to-one into the image with `screen.scale` pixels per point.
+    /// one-to-one into the image with the source screen's pixels per point.
+    /// When mirroring is on, the magnified content comes from the pointer's
+    /// display while the lens itself is placed on *this* display at the
+    /// proportionally mapped position.
     func drawZoomLens(cursor: Point, in context: CGContext) {
         guard let backgroundImage else { return }
-        let scale = screen.scale > 0 ? screen.scale : 1
+
+        // With mirroring on the location and content both come from the
+        // source screen (the pointer's display); without it, both are local
+        // and the mapping degenerates to the original behaviour.
+        let source = lensSourceScreen ?? screen
+        guard let placement = CursorEffectRenderer.mirrorLensPlacement(
+            cursor: cursorLocation,
+            source: source,
+            destination: screen
+        ) else { return }
+        let steer = source.scale > 0 ? source.scale : 1
 
         CursorEffectRenderer.drawZoomLens(
-            at: CGPoint(x: cursor.x, y: cursor.y),
-            around: CGPoint(x: cursor.x, y: cursor.y),
+            at: placement.destination,
+            around: placement.source,
             size: effects.zoomSize,
             zoomFactor: effects.zoomFactor,
             shape: effects.zoomShape,
             background: backgroundImage,
             contentOriginInPixels: .zero,
-            pixelsPerPointX: scale,
-            pixelsPerPointY: scale,
-            pointHeight: bounds.height,
+            pixelsPerPointX: steer,
+            pixelsPerPointY: steer,
+            pointHeight: source.size.height,
             in: context
         )
     }

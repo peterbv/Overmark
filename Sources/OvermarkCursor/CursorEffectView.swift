@@ -47,11 +47,25 @@ public final class CursorEffectView: NSView {
                 laserTrail.removeAll()
                 stopTrailTicker()
             }
+            if !effects.isLensMirrored && lensSourceScreen != nil {
+                // Mirroring just ended: the stale magnification mapping
+                // would place the crop at a foreign position.
+                lensSourceScreen = nil
+            }
         }
     }
 
     /// The screenshot shown under the zoom lens.
     public var backgroundImage: CGImage? {
+        didSet { needsDisplay = true }
+    }
+
+    /// The screen the magnified pixels come from when the lens is mirrored.
+    ///
+    /// nil means: the lens magnifies this view's own `screen`. The refresh
+    /// loop sets it on every non-hosting display while mirroring is on, so
+    /// those screens show the same lens the pointer's display does.
+    public var lensSourceScreen: ScreenFrame? {
         didSet { needsDisplay = true }
     }
 
@@ -139,7 +153,8 @@ public final class CursorEffectView: NSView {
                 in: context
             )
         }
-        if effects.isZoomEnabled && isCursorHere {
+        if effects.isZoomEnabled &&
+            (isCursorHere || (effects.isLensMirrored && lensSourceScreen != nil)) {
             drawZoomLens(cursor: cursor, in: context)
         }
         if effects.isHighlightEnabled && isCursorHere {

@@ -286,6 +286,14 @@ struct SettingsView: View {
             }
 
             Section(L10n.tr("Zoom")) {
+                Slider(value: $coordinator.cursorEffects.zoomSize, in: 80...420, step: 10) {
+                    Text(L10n.tr("Lens size"))
+                } minimumValueLabel: {
+                    Text("80")
+                } maximumValueLabel: {
+                    Text("420")
+                }
+
                 Slider(value: $coordinator.cursorEffects.zoomFactor, in: 1...6, step: 0.5) {
                     Text(L10n.tr("Magnification"))
                 } minimumValueLabel: {
@@ -300,6 +308,22 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+
+                Picker(L10n.tr("Refresh rate"), selection: $coordinator.cursorEffects.lensRefreshRate) {
+                    ForEach(LensRefreshRate.allCases) { rate in
+                        Text(rate.displayName).tag(rate)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if NSScreen.screens.count > 1 {
+                    Toggle(
+                        L10n.tr("Mirror lens on other displays"),
+                        isOn: $coordinator.cursorEffects.isLensMirrored
+                    )
+                }
+
+                Text(L10n.tr("The refresh rate buys motion smoothness at the cost of screen snapshot work in the background."))
             }
 
             Section(L10n.tr("Laser Pointer")) {
@@ -821,6 +845,16 @@ extension HighlightShape {
         case .circle: L10n.tr("Circle")
         case .squircle: L10n.tr("Squircle")
         case .rhombus: L10n.tr("Rhombus")
+        }
+    }
+}
+
+extension LensRefreshRate {
+    /// The name shown in the lens refresh picker, in the active language.
+    @MainActor var displayName: String {
+        switch self {
+        case .normal: L10n.tr("Normal (~3 fps)")
+        case .responsive: L10n.tr("Smooth (~8 fps)")
         }
     }
 }

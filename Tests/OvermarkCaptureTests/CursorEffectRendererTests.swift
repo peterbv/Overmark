@@ -199,6 +199,65 @@ struct CursorEffectRendererTests {
         )
     }
 
+    // MARK: - Lens mirroring
+
+    private func frame(
+        _ x: Double, _ y: Double, _ width: Double, _ height: Double, _ scale: Double = 2
+    ) -> ScreenFrame {
+        ScreenFrame(
+            origin: Point(x: x, y: y),
+            size: Size(width: width, height: height),
+            scale: scale
+        )
+    }
+
+    @Test func mirrorPlacementIsTheIdentityOnTheSameScreen() throws {
+        let screen = frame(0, 0, 1440, 900)
+        let placement = try #require(
+            CursorEffectRenderer.mirrorLensPlacement(
+                cursor: Point(x: 720, y: 450),
+                source: screen,
+                destination: screen
+            )
+        )
+        #expect(abs(placement.source.x - 720) < 0.001)
+        #expect(abs(placement.source.y - 450) < 0.001)
+        #expect(abs(placement.destination.x - 720) < 0.001)
+        #expect(abs(placement.destination.y - 450) < 0.001)
+    }
+
+    @Test func mirrorPlacementMapsAcrossDisplays() throws {
+        // Pointer at 25% across the source lands at 25% across the mirror.
+        let source = frame(0, 0, 1440, 900, 2)
+        let mirror = frame(1440, 0, 1920, 1080, 1)
+        let placement = try #require(
+            CursorEffectRenderer.mirrorLensPlacement(
+                cursor: Point(x: 360, y: 225),
+                source: source,
+                destination: mirror
+            )
+        )
+        #expect(abs(placement.source.x - 360) < 0.001)
+        #expect(abs(placement.source.y - 225) < 0.001)
+        #expect(abs(placement.destination.x - 480) < 0.001)
+        #expect(abs(placement.destination.y - 270) < 0.001)
+    }
+
+    @Test func mirrorPlacementAvoidsOffScreenCursors() {
+        let source = frame(0, 0, 1440, 900)
+        let mirror = frame(1440, 0, 1920, 1080)
+        // Way outside any display → no placement.
+        #expect(CursorEffectRenderer.mirrorLensPlacement(
+            cursor: Point(x: 5000, y: 450), source: source, destination: mirror) == nil
+        )
+        // Empty frames give nothing to map onto.
+        #expect(CursorEffectRenderer.mirrorLensPlacement(
+            cursor: Point(x: 100, y: 100),
+            source: frame(0, 0, 10, 0),
+            destination: mirror
+        ) == nil)
+    }
+
     // MARK: - Laser pointer
 
     @Test func laserFadeMath() {

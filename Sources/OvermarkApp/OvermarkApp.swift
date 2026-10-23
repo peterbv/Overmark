@@ -171,6 +171,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 400_000_000)
             step("laser pointer off")
 
+            // The configurable lens exercises the in-place update path:
+            // resizing, then the quick refresh cadence, then mirroring (a
+            // toggle the refresh loop starts pushing to other displays on
+            // the next tick), and finally everything back off.
+            coordinator.cursorEffects.isZoomEnabled = true
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("zoom back on for lens settings")
+            coordinator.cursorEffects.zoomSize = 380
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            step("lens resized in place")
+            FileHandle.standardError.write(Data(
+                "[PROBE] lens size: \(coordinator.cursorEffects.zoomSize), rate: \(coordinator.cursorEffects.lensRefreshRate)\n".utf8
+            ))
+            coordinator.cursorEffects.lensRefreshRate = .responsive
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            step("lens refresh quick")
+            coordinator.cursorEffects.isLensMirrored = true
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            step("lens mirrored")
+            coordinator.cursorEffects.isLensMirrored = false
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("lens unmirrored (rebuild hands back own snapshots)")
+            coordinator.cursorEffects.isZoomEnabled = false
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("zoom off after lens settings")
+
             await coordinator.toggleAnnotationMode()
             step("exitAnnotationMode")
             try? await Task.sleep(nanoseconds: 400_000_000)

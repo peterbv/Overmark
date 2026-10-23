@@ -248,6 +248,44 @@ public enum CursorEffectRenderer {
         return clamped
     }
 
+    /// Maps the pointer from the screen it sits on to the screen that
+    /// mirrors the lens.
+    ///
+    /// Both screens are treated as normalized work areas: a pointer at 25%
+    /// across the source screen places the lens at 25% across the mirror
+    /// screen. The returned destination point lives in the destination
+    /// screen's local (origin-subtracted) space, ready to use as the lens
+    /// center; the source point is the crop center in source-local space.
+    /// When the source and destination are the same screen the mapping is
+    /// the identity, which is exactly the built-in single-screen lens.
+    ///
+    /// - Returns: nil when the cursor is outside the source screen frame
+    ///   (the crop would clamp away from real content) or a frame is empty.
+    public static func mirrorLensPlacement(
+        cursor: Point,
+        source: ScreenFrame,
+        destination: ScreenFrame
+    ) -> (source: CGPoint, destination: CGPoint)? {
+        guard source.size.width > 0, source.size.height > 0,
+              destination.size.width > 0, destination.size.height > 0 else {
+            return nil
+        }
+        let tx = cursor.x - source.origin.x
+        let ty = cursor.y - source.origin.y
+        guard tx >= -1, ty >= -1,
+              tx <= source.size.width + 1, ty <= source.size.height + 1
+        else { return nil }
+        let relativeX = tx / source.size.width
+        let relativeY = ty / source.size.height
+        return (
+            source: CGPoint(x: tx, y: ty),
+            destination: CGPoint(
+                x: relativeX * destination.size.width,
+                y: relativeY * destination.size.height
+            )
+        )
+    }
+
     /// Draws a magnified lens showing the pixels under the pointer.
     ///
     /// The lens shows a *crop* of `background` around the pointer, magnified

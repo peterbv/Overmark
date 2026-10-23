@@ -187,6 +187,13 @@ public enum L10n {
         "Zoom": "Zoom",
         "Magnification": "Aumento",
         "Shape": "Forma",
+        "Lens size": "Tamaño de la lente",
+        "Refresh rate": "Frecuencia de refresco",
+        "Mirror lens on other displays": "Reflejar la lente en las otras pantallas",
+        "Normal (~3 fps)": "Normal (~3 fps)",
+        "Smooth (~8 fps)": "Fluida (~8 fps)",
+        "The refresh rate buys motion smoothness at the cost of screen snapshot work in the background.":
+            "La frecuencia de refresco compra fluidez a costa de trabajo de captura de pantalla en segundo plano.",
         "Dot colour": "Color del punto",
         "Dot size": "Tamaño del punto",
         "The laser follows your pointer with a short glowing trail, on the overlay and burned into window recordings.":

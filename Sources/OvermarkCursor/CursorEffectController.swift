@@ -70,15 +70,22 @@ public final class CursorEffectController {
     /// Applies new effects, updating the windows in place when possible.
     ///
     /// A rebuild is only needed when no windows exist yet, when everything
-    /// turns off, or when the zoom lens turns on without a background
-    /// screenshot to magnify. Everything else — nudging the zoom factor,
+    /// turns off, when the zoom lens turns on without a background
+    /// screenshot to magnify, or when mirroring ends with several displays
+    /// still holding the pointer display's pixels under the lens.
+    /// Everything else — nudging the zoom factor, resizing the lens,
     /// toggling the highlight on top of an already-built spotlight — only
     /// pushes values into the existing views, so sliders stay smooth.
     public func apply(effects: CursorEffects) async {
         let hadBackgrounds = entries.values.contains { $0.view.backgroundImage != nil }
+        let hadMirroredLens = entries.values.contains { $0.view.lensSourceScreen != nil }
         let needsRebuild = entries.isEmpty
             || effects == CursorEffects()
             || (effects.isZoomEnabled && !hadBackgrounds)
+            // Turning mirroring off hands each display back its own
+            // per-display lens: the views now hold the pointer screen's
+            // picture with a foreign magnification mapping.
+            || (!effects.isLensMirrored && hadMirroredLens)
 
         guard !needsRebuild else {
             await show(effects: effects)
@@ -225,18 +232,24 @@ public final class CursorEffectController {
     /// Keeps the zoom lens's screenshot current.
     ///
     /// A lens that magnifies yesterday's picture is of little use: this
-    /// loop re-captures the display under the pointer a few times a second,
-    /// so anything that moves or redraws — app windows, browsers, edits —
-    /// shows up magnified in real time. Displays without the pointer keep
-    /// their build-time snapshot; the lens only ever draws on the display
-    /// hosting the pointer anyway.
+    /// loop re-captures the display under the pointer at the configured
+    /// cadence (about three times a second by default, eight with the
+    /// quick rate), so anything that moves or redraws — app windows,
+    /// browsers, edits — shows up magnified in real time. Displays without
+    /// the pointer keep their build-time snapshot; the lens only draws on
+    /// the display hosting the pointer — unless mirroring is on, in which
+    /// case every display re-captures the pointer's screen each tick.
     private func startBackgroundRefresh() {
         guard backgroundRefreshTask == nil, effects.isZoomEnabled, !entries.isEmpty else { return }
         backgroundRefreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self, let displayID = self.nextLensDisplay() else { return }
                 await self.refreshLensBackground(for: displayID)
-                try? await Task.sleep(nanoseconds: 320_000_000)
+                // The interval is re-read every tick so changing the
+                // refresh rate in settings takes effect immediately.
+                try? await Task.sleep(
+                    nanoseconds: UInt64(self.effects.lensRefreshRate.interval * 1_000_000_000)
+                )
             }
         }
     }
@@ -259,13 +272,40 @@ public final class CursorEffectController {
     ///
     /// Captures exclude the controller's own effect windows, so the lens
     /// never ends up magnifying a picture of itself.
+    ///
+    /// With mirroring on, the pushed snapshot is not confined to the
+    /// display it came from: every *other* display receives the picture
+    /// together with the source frame so the view can place the magnified
+    /// crop at the proportionally mapped position of the pointer. The
+    /// display hosting the pointer keeps its plain, position-faithful lens.
     private func refreshLensBackground(for displayID: CGDirectDisplayID) async {
         guard let snapshot = try? await captureService.capture(displayID: displayID) else {
             return
         }
         // The entry may have been torn down while the capture was in
         // flight; assigning into the map then is a harmless no-op.
-        entries[displayID]?.view.backgroundImage = snapshot.image
+        guard let hosting = entries[displayID] else { return }
+        guard hosting.view.screen.size.width > 0 else { return }
+        let sourceFrame = hosting.view.screen
+
+        // CGImage is a reference type, so skipping identical assignments
+        // saves every display from an unneeded redraw each tick.
+        if hosting.view.backgroundImage !== snapshot.image {
+            hosting.view.backgroundImage = snapshot.image
+        }
+        if hosting.view.lensSourceScreen != nil {
+            hosting.view.lensSourceScreen = nil
+        }
+
+        guard effects.isLensMirrored else { return }
+        for (key, entry) in entries where key != displayID {
+            if entry.view.backgroundImage !== snapshot.image {
+                entry.view.backgroundImage = snapshot.image
+            }
+            if entry.view.lensSourceScreen != sourceFrame {
+                entry.view.lensSourceScreen = sourceFrame
+            }
+        }
     }
 
     /// One AppKit screen plus the identifiers the controller keys on.

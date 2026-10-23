@@ -60,6 +60,11 @@ public struct CursorEffects: Hashable, Sendable, Codable {
     public var laserColor: Color
     /// Radius of the laser dot core, in points.
     public var laserRadius: Double
+    /// Whether displays other than the pointer's own show the same zoom
+    /// lens, placed where the pointer would map onto them.
+    public var isLensMirrored: Bool
+    /// How often the lens re-captures the screen content it magnifies.
+    public var lensRefreshRate: LensRefreshRate
 
     public init(
         isHighlightEnabled: Bool = false,
@@ -78,7 +83,9 @@ public struct CursorEffects: Hashable, Sendable, Codable {
         isClickAnimationEnabled: Bool = true,
         isLaserEnabled: Bool = false,
         laserColor: Color = .red,
-        laserRadius: Double = 5
+        laserRadius: Double = 5,
+        isLensMirrored: Bool = false,
+        lensRefreshRate: LensRefreshRate = .normal
     ) {
         self.isHighlightEnabled = isHighlightEnabled
         self.highlightRadius = highlightRadius
@@ -97,6 +104,8 @@ public struct CursorEffects: Hashable, Sendable, Codable {
         self.isLaserEnabled = isLaserEnabled
         self.laserColor = laserColor
         self.laserRadius = laserRadius
+        self.isLensMirrored = isLensMirrored
+        self.lensRefreshRate = lensRefreshRate
     }
 
     /// Decodes settings tolerantly, so stored bundles written before a field
@@ -122,6 +131,26 @@ public struct CursorEffects: Hashable, Sendable, Codable {
         isLaserEnabled = try container.decodeIfPresent(Bool.self, forKey: .isLaserEnabled) ?? false
         laserColor = try container.decodeIfPresent(Color.self, forKey: .laserColor) ?? .red
         laserRadius = try container.decodeIfPresent(Double.self, forKey: .laserRadius) ?? 5
+        isLensMirrored = try container.decodeIfPresent(Bool.self, forKey: .isLensMirrored) ?? false
+        lensRefreshRate = try container.decodeIfPresent(LensRefreshRate.self, forKey: .lensRefreshRate) ?? .normal
+    }
+}
+
+/// How often the zoom lens re-captures the content it magnifies.
+///
+/// A lens stays live, so this choice trades motion smoothness against the
+/// cost of grabbing screen snapshots in the background.
+public enum LensRefreshRate: String, Hashable, Sendable, Codable, CaseIterable, Identifiable {
+    /// The original cadence, about three updates per second.
+    case normal
+    /// A quicker cadence for hand-drawn material, at a battery cost.
+    case responsive
+
+    public var id: String { rawValue }
+
+    /// Seconds between two lens background refreshes.
+    public var interval: TimeInterval {
+        self == .normal ? 0.32 : 0.12
     }
 }
 

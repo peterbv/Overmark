@@ -44,10 +44,12 @@ struct CursorEffectsTests {
         #expect(effects.highlightFillOpacity == 0.4)
         #expect(!effects.isClickAnimationEnabled)
 
-        // …and the laser comes up with its defaults.
+        // …and the fields added later come up with their defaults.
         #expect(!effects.isLaserEnabled)
         #expect(effects.laserColor == .red)
         #expect(effects.laserRadius == 5)
+        #expect(!effects.isLensMirrored)
+        #expect(effects.lensRefreshRate == .normal)
     }
 
     @Test func roundTripCarriesTheLaserSettings() throws {
@@ -70,5 +72,29 @@ struct CursorEffectsTests {
         #expect(!effects.isLaserEnabled)
         #expect(effects.laserColor == .red)
         #expect(effects.laserRadius == 5)
+    }
+
+    @Test func lensDefaults() {
+        let effects = CursorEffects()
+        #expect(effects.zoomSize == 240)
+        #expect(!effects.isLensMirrored)
+        #expect(effects.lensRefreshRate == .normal)
+        #expect(effects.lensRefreshRate.interval == 0.32)
+        #expect(LensRefreshRate.responsive.interval == 0.12)
+    }
+
+    @Test func roundTripCarriesTheLensSettings() throws {
+        var effects = CursorEffects()
+        effects.zoomSize = 380
+        effects.lensRefreshRate = .responsive
+        effects.isLensMirrored = true
+
+        let data = try JSONEncoder().encode(effects)
+        let decoded = try JSONDecoder().decode(CursorEffects.self, from: data)
+
+        #expect(decoded == effects)
+        #expect(decoded.zoomSize == 380)
+        #expect(decoded.lensRefreshRate == .responsive)
+        #expect(decoded.isLensMirrored)
     }
 }
