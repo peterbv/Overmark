@@ -335,4 +335,110 @@ public enum CursorEffectRenderer {
             context.strokePath()
         }
     }
+
+    // MARK: - Laser pointer
+
+    /// How long the laser trail keeps glowing, in seconds.
+    ///
+    /// Points older than this have faded out entirely and are dropped by the
+    /// sources feeding this renderer, not by the drawing itself.
+    public static let trailDuration: TimeInterval = 0.7
+
+    /// The tail's style at `progress` (0 fresh … 1 about to fade out).
+    ///
+    /// The stroke thins towards the tail but never fully vanishes in width,
+    /// while its alpha falls linearly to nothing — that combination reads as
+    /// light dimming rather than a shrinking wire.
+    static func laserFade(progress: Double) -> (widthFactor: Double, alpha: Double) {
+        let clamped = max(0, min(1, progress))
+        return (widthFactor: max(0.25, 1 - clamped), alpha: 0.85 * (1 - clamped))
+    }
+
+    /// Draws the laser trail: a fading polyline along recent pointer
+    /// samples, oldest first.
+    ///
+    /// Segments with both ends inside `keep` are drawn; everything else is
+    /// skipped, so a trail is never published across display borders into
+    /// the wrong coordinates. On-screen each view passes its own bounds; the
+    /// recorder passes the whole window (the frame buffer clips anyway).
+    public static func drawLaserTrail(
+        _ samples: [(point: CGPoint, at: Date)],
+        at now: Date,
+        color: Color,
+        radius: Double,
+        keep: CGRect,
+        in context: CGContext
+    ) {
+        guard samples.count > 1 else { return }
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.setStrokeColor(CGColor(
+            red: color.red,
+            green: color.green,
+            blue: color.blue,
+            alpha: 1
+        ))
+        for index in 1..<samples.count {
+            let start = samples[index - 1].point
+            let end = samples[index].point
+            guard keep.contains(CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)) else {
+                continue
+            }
+            let age = now.timeIntervalSince(samples[index].at)
+            guard age >= 0, age < trailDuration else { continue }
+            let fade = laserFade(progress: age / trailDuration)
+            context.setLineWidth(max(0.5, radius * 2 * fade.widthFactor))
+            context.setAlpha(fade.alpha)
+            context.beginPath()
+            context.move(to: start)
+            context.addLine(to: end)
+            context.strokePath()
+        }
+    }
+
+    /// Draws the bright laser dot itself: a soft halo, a saturated core and
+    /// a small white fleck for the punch of real presenter hardware.
+    public static func drawLaserDot(
+        at point: CGPoint,
+        color: Color,
+        radius: Double,
+        in context: CGContext
+    ) {
+        context.saveGState()
+        defer { context.restoreGState() }
+        let colour = CGColor(
+            red: color.red,
+            green: color.green,
+            blue: color.blue,
+            alpha: 1
+        )
+
+        context.setFillColor(colour)
+        context.setAlpha(0.3)
+        context.fillEllipse(in: CGRect(
+            x: point.x - radius * 2.75,
+            y: point.y - radius * 2.75,
+            width: radius * 5.5,
+            height: radius * 5.5
+        ))
+
+        context.setAlpha(0.95)
+        context.fillEllipse(in: CGRect(
+            x: point.x - radius,
+            y: point.y - radius,
+            width: radius * 2,
+            height: radius * 2
+        ))
+
+        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        context.setAlpha(0.55)
+        context.fillEllipse(in: CGRect(
+            x: point.x - radius * 0.4,
+            y: point.y - radius * 0.4,
+            width: radius * 0.8,
+            height: radius * 0.8
+        ))
+    }
 }

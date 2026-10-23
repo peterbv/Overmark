@@ -563,6 +563,34 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
             )
         }
 
+        // The laser paints above the other pointer effects: its tail fades
+        // in screen space through the same matrix, and the frame buffer
+        // clips whatever spills past the window edge.
+        if effectFrame.effects.isLaserEnabled {
+            let trail = effectFrame.laserTrail.map { sample in
+                (
+                    point: CGPoint(x: sample.point.x, y: sample.point.y),
+                    at: sample.at
+                )
+            }
+            CursorEffectRenderer.drawLaserTrail(
+                trail,
+                at: Date(),
+                color: effectFrame.effects.laserColor,
+                radius: effectFrame.effects.laserRadius,
+                keep: windowCGRect,
+                in: context
+            )
+        }
+        if effectFrame.effects.isLaserEnabled, isCursorHere, let cursor = cursorCGPoint {
+            CursorEffectRenderer.drawLaserDot(
+                at: cursor,
+                color: effectFrame.effects.laserColor,
+                radius: effectFrame.effects.laserRadius,
+                in: context
+            )
+        }
+
         if !effectFrame.clicks.isEmpty {
             let now = Date()
             // The ripple may spill past the window edge, hence the

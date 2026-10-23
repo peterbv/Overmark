@@ -83,4 +83,69 @@ struct CursorEffectBoxTests {
         )])
         #expect(withClick.hasBurnableContent)
     }
+
+    @Test func trailOnlyAppendsWhileLaserIsOn() {
+        var effects = CursorEffects()
+        let box = CursorEffectBox()
+        box.updateEffects(effects)
+        box.updateCursor(Point(x: 1, y: 1))
+        #expect(box.current().laserTrail.isEmpty)
+
+        effects.isLaserEnabled = true
+        box.updateEffects(effects)
+        let sample = Point(x: 5, y: 6)
+        box.updateCursor(sample)
+        let frame = box.current()
+        #expect(frame.laserTrail.count == 1)
+        #expect(frame.laserTrail.first?.point == sample)
+    }
+
+    @Test func trailPrunesStaleSamplesAndCaps() {
+        var effects = CursorEffects()
+        effects.isLaserEnabled = true
+        let box = CursorEffectBox()
+        box.updateEffects(effects)
+
+        let now = Date()
+        // A sample from before the glow window: the fresh append prunes it.
+        box.updateCursor(Point(x: -9, y: -9), at: now.addingTimeInterval(-CursorEffectBox.trailWindow - 1))
+        box.updateCursor(Point(x: 1, y: 1), at: now)
+        #expect(box.current().laserTrail.count == 1)
+
+        for index in 0..<(CursorEffectBox.trailCapacity + 3) {
+            box.updateCursor(Point(x: Double(index), y: 0), at: now.addingTimeInterval(Double(index) * 0.001))
+        }
+        let trail = box.current().laserTrail
+        #expect(trail.count == CursorEffectBox.trailCapacity)
+        #expect(trail.last?.point.x == Double(CursorEffectBox.trailCapacity + 2))
+    }
+
+    @Test func turningLaserOffClearsTheTrailAndNilCursorForgetsIt() {
+        var effects = CursorEffects()
+        effects.isLaserEnabled = true
+        let box = CursorEffectBox()
+        box.updateEffects(effects)
+        box.updateCursor(Point(x: 2, y: 2))
+        #expect(!box.current().laserTrail.isEmpty)
+
+        // Track loss (nil position) also drops the trail: a tail pointing
+        // nowhere is worse than none.
+        box.updateCursor(nil)
+        #expect(box.current().laserTrail.isEmpty)
+
+        box.updateCursor(Point(x: 3, y: 3))
+        effects.isLaserEnabled = false
+        box.updateEffects(effects)
+        #expect(box.current().laserTrail.isEmpty)
+        #expect(box.current().cursor == Point(x: 3, y: 3))
+    }
+
+    @Test func laserFlagsInBurnableContent() {
+        var effects = CursorEffects()
+        effects.isLaserEnabled = true
+        #expect(CursorEffectFrame(effects: effects).hasBurnableContent)
+
+        let withTrail = CursorEffectFrame(laserTrail: [LaserSample(point: Point(x: 0, y: 0))])
+        #expect(withTrail.hasBurnableContent)
+    }
 }

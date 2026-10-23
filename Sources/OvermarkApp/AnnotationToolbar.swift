@@ -357,9 +357,9 @@ struct AnnotationToolbarView: View {
                 .frame(height: 22)
 
             // The cursor effects live next to the drawing controls: the ring
-            // (circle.dashed), the spotlight and the zoom lens, each filled
-            // while the effect is enabled — same state the menu and hotkeys
-            // toggle.
+            // (circle.dashed), the spotlight, the zoom lens and the laser
+            // pointer, each filled while the effect is enabled — same state
+            // the menu and hotkeys toggle.
             EffectButton(
                 systemImage: "circle.dashed",
                 isSelected: coordinator.cursorEffects.isHighlightEnabled,
@@ -380,6 +380,13 @@ struct AnnotationToolbarView: View {
                 help: L10n.tr("Zoom lens")
             ) {
                 coordinator.cursorEffects.isZoomEnabled.toggle()
+            }
+            EffectButton(
+                systemImage: "cursorarrow.rays",
+                isSelected: coordinator.cursorEffects.isLaserEnabled,
+                help: L10n.tr("Laser Pointer")
+            ) {
+                coordinator.cursorEffects.isLaserEnabled.toggle()
             }
 
             Divider()

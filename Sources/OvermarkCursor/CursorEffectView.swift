@@ -31,12 +31,23 @@ public struct ClickPulse: Equatable, Sendable {
 public final class CursorEffectView: NSView {
     /// The pointer position, in screen space.
     public var cursorLocation: Point = .zero {
-        didSet { needsDisplay = true }
+        didSet {
+            needsDisplay = true
+            if effects.isLaserEnabled {
+                appendTrailSample(cursorLocation)
+            }
+        }
     }
 
     /// The effects to draw.
     public var effects: CursorEffects {
-        didSet { needsDisplay = true }
+        didSet {
+            needsDisplay = true
+            if !effects.isLaserEnabled {
+                laserTrail.removeAll()
+                stopTrailTicker()
+            }
+        }
     }
 
     /// The screenshot shown under the zoom lens.
@@ -74,6 +85,13 @@ public final class CursorEffectView: NSView {
 
     /// The 60 fps ticker that keeps redrawing while a ripple plays.
     private var pulseTicker: Timer?
+
+    /// Recent laser positions, in screen space, oldest first.
+    private var laserTrail: [LaserSample] = []
+    /// The 30 fps ticker that fades the laser tail out while it lives.
+    private var trailTicker: Timer?
+    /// Upper bound on remembered samples; mirrors the recorder's trail box.
+    private static let trailCapacity = 64
 
     public override init(frame frameRect: NSRect) {
         self.effects = CursorEffects()
@@ -128,6 +146,37 @@ public final class CursorEffectView: NSView {
             drawHighlight(cursor: cursor, in: context)
         }
 
+        // The laser paints fresh: stale samples are dropped before anything
+        // is drawn, and the dot is layered above its tail.
+        if effects.isLaserEnabled {
+            pruneTrail()
+            let trail = laserTrail.map { sample in
+                (
+                    point: CGPoint(
+                        x: sample.point.x - originX,
+                        y: sample.point.y - originY
+                    ),
+                    at: sample.at
+                )
+            }
+            CursorEffectRenderer.drawLaserTrail(
+                trail,
+                at: Date(),
+                color: effects.laserColor,
+                radius: effects.laserRadius,
+                keep: bounds,
+                in: context
+            )
+            if isCursorHere {
+                CursorEffectRenderer.drawLaserDot(
+                    at: CGPoint(x: cursor.x, y: cursor.y),
+                    color: effects.laserColor,
+                    radius: effects.laserRadius,
+                    in: context
+                )
+            }
+        }
+
         if let pulse = clickPulse,
            pulseElapsed(pulse) < Self.pulseDuration + 0.05 {
             let local = Point(
@@ -156,6 +205,61 @@ public final class CursorEffectView: NSView {
     /// Seconds since the pulse started.
     private func pulseElapsed(_ pulse: ClickPulse) -> TimeInterval {
         Date().timeIntervalSince(pulse.startedAt)
+    }
+
+    // MARK: - Laser trail
+
+    /// Appends one trail sample and keeps the tail short enough to glow.
+    private func appendTrailSample(_ point: Point) {
+        let now = Date()
+        laserTrail.removeAll {
+            now.timeIntervalSince($0.at) > CursorEffectRenderer.trailDuration
+        }
+        laserTrail.append(LaserSample(point: point, at: now))
+        if laserTrail.count > Self.trailCapacity {
+            laserTrail.removeFirst(laserTrail.count - Self.trailCapacity)
+        }
+        startTrailTicker()
+        needsDisplay = true
+    }
+
+    /// Drops samples whose glow has fully faded.
+    private func pruneTrail() {
+        let now = Date()
+        laserTrail.removeAll {
+            now.timeIntervalSince($0.at) > CursorEffectRenderer.trailDuration
+        }
+        if laserTrail.isEmpty {
+            stopTrailTicker()
+        }
+    }
+
+    /// Keeps redrawing while the tail fades out, like the pulse ticker does
+    /// for ripples. Nothing else invalidates the view while the pointer is
+    /// still, so this 30 fps ticker drives the trail's fade.
+    private func startTrailTicker() {
+        guard trailTicker == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] sender in
+            guard let self else {
+                // The view is gone; nobody else can stop this timer.
+                sender.invalidate()
+                return
+            }
+            MainActor.assumeIsolated {
+                if self.laserTrail.isEmpty {
+                    self.stopTrailTicker()
+                } else {
+                    self.needsDisplay = true
+                }
+            }
+        }
+        trailTicker = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopTrailTicker() {
+        trailTicker?.invalidate()
+        trailTicker = nil
     }
 
     /// Keeps redrawing while a ripple plays.

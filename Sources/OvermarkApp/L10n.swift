@@ -187,6 +187,10 @@ public enum L10n {
         "Zoom": "Zoom",
         "Magnification": "Aumento",
         "Shape": "Forma",
+        "Dot colour": "Color del punto",
+        "Dot size": "Tamaño del punto",
+        "The laser follows your pointer with a short glowing trail, on the overlay and burned into window recordings.":
+            "El láser sigue tu puntero con un rastro luminoso breve, sobre la capa y grabado en los videos por ventana.",
         "Grant": "Conceder",
         "Open System Settings": "Abrir Ajustes del Sistema",
 

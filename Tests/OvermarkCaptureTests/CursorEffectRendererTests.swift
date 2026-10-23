@@ -199,6 +199,123 @@ struct CursorEffectRendererTests {
         )
     }
 
+    // MARK: - Laser pointer
+
+    @Test func laserFadeMath() {
+        let fresh = CursorEffectRenderer.laserFade(progress: 0)
+        #expect(abs(fresh.widthFactor - 1) < 0.001)
+        #expect(abs(fresh.alpha - 0.85) < 0.001)
+
+        let mid = CursorEffectRenderer.laserFade(progress: 0.5)
+        #expect(abs(mid.widthFactor - 0.5) < 0.001)
+        #expect(abs(mid.alpha - 0.425) < 0.001)
+
+        // The tail clamps: width floors at a quarter, alpha hits zero.
+        let gone = CursorEffectRenderer.laserFade(progress: 1.5)
+        #expect(abs(gone.widthFactor - 0.25) < 0.001)
+        #expect(abs(gone.alpha) < 0.001)
+    }
+
+    @Test func dotPaintsABrightCore() {
+        let size = CGSize(width: 32, height: 32)
+        let context = Self.bitmapContext(size: size)
+        CursorEffectRenderer.drawLaserDot(
+            at: CGPoint(x: 16, y: 16),
+            color: .red,
+            radius: 5,
+            in: context
+        )
+        guard let image = context.makeImage() else {
+            Issue.record("bitmap unavailable")
+            return
+        }
+        // The core is saturated red; a far corner stays untouched.
+        let center = Self.pixel(in: image, at: CGPoint(x: 16, y: 16))
+        #expect(center.red > 0.8)
+        #expect(center.alpha > 0.5)
+        let corner = Self.pixel(in: image, at: CGPoint(x: 1, y: 1))
+        #expect(corner.alpha < 0.05)
+    }
+
+    @Test func trailDrawsFreshAndSkipsStale() {
+        let size = CGSize(width: 32, height: 32)
+        let now = Date()
+
+        let painted = Self.bitmapContext(size: size)
+        painted.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        painted.fill(CGRect(origin: .zero, size: size))
+        CursorEffectRenderer.drawLaserTrail(
+            [
+                (point: CGPoint(x: 16, y: 8), at: now.addingTimeInterval(-0.1)),
+                (point: CGPoint(x: 16, y: 16), at: now.addingTimeInterval(-0.05)),
+                (point: CGPoint(x: 16, y: 24), at: now),
+            ],
+            at: now,
+            color: .red,
+            radius: 4,
+            keep: CGRect(origin: .zero, size: size),
+            in: painted
+        )
+        guard let drawnImage = painted.makeImage() else {
+            Issue.record("bitmap unavailable")
+            return
+        }
+        let drawn = Self.pixel(in: drawnImage, at: CGPoint(x: 16, y: 16))
+        // A red stroke over white: red stays high, the green channel drops.
+        #expect(drawn.red > 0.9)
+        #expect(drawn.green < 0.6)
+
+        let faded = Self.bitmapContext(size: size)
+        faded.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        faded.fill(CGRect(origin: .zero, size: size))
+        let staleAt = now.addingTimeInterval(-CursorEffectRenderer.trailDuration - 1)
+        CursorEffectRenderer.drawLaserTrail(
+            [
+                (point: CGPoint(x: 16, y: 8), at: staleAt),
+                (point: CGPoint(x: 16, y: 16), at: staleAt),
+                (point: CGPoint(x: 16, y: 24), at: staleAt),
+            ],
+            at: now,
+            color: .red,
+            radius: 4,
+            keep: CGRect(origin: .zero, size: size),
+            in: faded
+        )
+        guard let fadedImage = faded.makeImage() else {
+            Issue.record("bitmap unavailable")
+            return
+        }
+        // Nothing drawn over the white base.
+        let kept = Self.pixel(in: fadedImage, at: CGPoint(x: 16, y: 16))
+        #expect(kept.red > 0.98)
+        #expect(kept.green > 0.98)
+    }
+
+    @Test func trailSkipsSegmentsOutsideTheKeepRect() {
+        let size = CGSize(width: 32, height: 32)
+        let context = Self.bitmapContext(size: size)
+        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        context.fill(CGRect(origin: .zero, size: size))
+        let now = Date()
+        CursorEffectRenderer.drawLaserTrail(
+            [
+                (point: CGPoint(x: 24, y: 8), at: now.addingTimeInterval(-0.1)),
+                (point: CGPoint(x: 24, y: 24), at: now),
+            ],
+            at: now,
+            color: .red,
+            radius: 4,
+            // Only the left half is kept; the segment at x=24 is skipped.
+            keep: CGRect(x: 0, y: 0, width: 16, height: size.height),
+            in: context
+        )
+        guard let image = context.makeImage() else {
+            Issue.record("bitmap unavailable")
+            return
+        }
+        #expect(Self.pixel(in: image, at: CGPoint(x: 24, y: 16)).green > 0.97)
+    }
+
     // MARK: - Contexts
 
     private static func bitmapContext(size: CGSize) -> CGContext {
@@ -214,7 +331,7 @@ struct CursorEffectRendererTests {
         return context
     }
 
-    private static func pixel(in image: CGImage, at point: CGPoint) -> (red: Double, alpha: Double) {
+    private static func pixel(in image: CGImage, at point: CGPoint) -> (red: Double, green: Double, alpha: Double) {
         let width = image.width
         let height = image.height
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
@@ -233,6 +350,7 @@ struct CursorEffectRendererTests {
         let index = (row * width + column) * 4
         return (
             Double(pixels[index]) / 255,
+            Double(pixels[index + 1]) / 255,
             Double(pixels[index + 3]) / 255
         )
     }

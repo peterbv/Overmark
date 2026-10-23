@@ -53,6 +53,13 @@ public struct CursorEffects: Hashable, Sendable, Codable {
     public var highlightFillOpacity: Double
     /// Whether clicks play a ripple animation around the pointer.
     public var isClickAnimationEnabled: Bool
+    /// Whether the pointer is followed by a laser dot with a short
+    /// glowing trail.
+    public var isLaserEnabled: Bool
+    /// Colour of the laser dot and its trail.
+    public var laserColor: Color
+    /// Radius of the laser dot core, in points.
+    public var laserRadius: Double
 
     public init(
         isHighlightEnabled: Bool = false,
@@ -68,7 +75,10 @@ public struct CursorEffects: Hashable, Sendable, Codable {
         highlightShape: HighlightShape = .circle,
         highlightBorderWidth: Double = 3,
         highlightFillOpacity: Double = 0.35,
-        isClickAnimationEnabled: Bool = true
+        isClickAnimationEnabled: Bool = true,
+        isLaserEnabled: Bool = false,
+        laserColor: Color = .red,
+        laserRadius: Double = 5
     ) {
         self.isHighlightEnabled = isHighlightEnabled
         self.highlightRadius = highlightRadius
@@ -84,6 +94,34 @@ public struct CursorEffects: Hashable, Sendable, Codable {
         self.highlightBorderWidth = highlightBorderWidth
         self.highlightFillOpacity = highlightFillOpacity
         self.isClickAnimationEnabled = isClickAnimationEnabled
+        self.isLaserEnabled = isLaserEnabled
+        self.laserColor = laserColor
+        self.laserRadius = laserRadius
+    }
+
+    /// Decodes settings tolerantly, so stored bundles written before a field
+    /// existed keep working: older blobs simply get the default for the new
+    /// fields instead of failing the whole decode and falling back to factory
+    /// settings (which would drop the user's highlight/spotlight choices).
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isHighlightEnabled = try container.decodeIfPresent(Bool.self, forKey: .isHighlightEnabled) ?? false
+        highlightRadius = try container.decodeIfPresent(Double.self, forKey: .highlightRadius) ?? 40
+        highlightColor = try container.decodeIfPresent(Color.self, forKey: .highlightColor) ?? .yellow
+        isSpotlightEnabled = try container.decodeIfPresent(Bool.self, forKey: .isSpotlightEnabled) ?? false
+        spotlightRadius = try container.decodeIfPresent(Double.self, forKey: .spotlightRadius) ?? 260
+        spotlightDimOpacity = try container.decodeIfPresent(Double.self, forKey: .spotlightDimOpacity) ?? 0.55
+        isZoomEnabled = try container.decodeIfPresent(Bool.self, forKey: .isZoomEnabled) ?? false
+        zoomFactor = try container.decodeIfPresent(Double.self, forKey: .zoomFactor) ?? 2
+        zoomSize = try container.decodeIfPresent(Double.self, forKey: .zoomSize) ?? 240
+        zoomShape = try container.decodeIfPresent(ZoomShape.self, forKey: .zoomShape) ?? .circle
+        highlightShape = try container.decodeIfPresent(HighlightShape.self, forKey: .highlightShape) ?? .circle
+        highlightBorderWidth = try container.decodeIfPresent(Double.self, forKey: .highlightBorderWidth) ?? 3
+        highlightFillOpacity = try container.decodeIfPresent(Double.self, forKey: .highlightFillOpacity) ?? 0.35
+        isClickAnimationEnabled = try container.decodeIfPresent(Bool.self, forKey: .isClickAnimationEnabled) ?? true
+        isLaserEnabled = try container.decodeIfPresent(Bool.self, forKey: .isLaserEnabled) ?? false
+        laserColor = try container.decodeIfPresent(Color.self, forKey: .laserColor) ?? .red
+        laserRadius = try container.decodeIfPresent(Double.self, forKey: .laserRadius) ?? 5
     }
 }
 

@@ -18,6 +18,19 @@ public struct CursorClick: Hashable, Sendable {
     }
 }
 
+/// One sampled position of the laser trail, while it is on.
+public struct LaserSample: Hashable, Sendable {
+    /// Where the pointer was, in screen space.
+    public var point: Point
+    /// When the sample was taken; the trail fades over a fixed window.
+    public var at: Date
+
+    public init(point: Point, at: Date = Date()) {
+        self.point = point
+        self.at = at
+    }
+}
+
 /// A frame's worth of cursor-effect state for the recorder.
 ///
 /// The presenter thread writes (tool settings, pointer position, clicks) and
@@ -32,15 +45,20 @@ public struct CursorEffectFrame: Hashable, Sendable {
     /// Recent clicks, oldest first; the frame keeps a short window because a
     /// ripple only animates for a fraction of a second.
     public var clicks: [CursorClick]
+    /// Recent laser positions, oldest first; the trail glows briefly and
+    /// fades, so only a short window matters.
+    public var laserTrail: [LaserSample]
 
     public init(
         effects: CursorEffects = CursorEffects(),
         cursor: Point? = nil,
-        clicks: [CursorClick] = []
+        clicks: [CursorClick] = [],
+        laserTrail: [LaserSample] = []
     ) {
         self.effects = effects
         self.cursor = cursor
         self.clicks = clicks
+        self.laserTrail = laserTrail
     }
 
     /// Whether this frame carries anything worth burning into video.
@@ -51,7 +69,9 @@ public struct CursorEffectFrame: Hashable, Sendable {
         effects.isHighlightEnabled
             || effects.isSpotlightEnabled
             || effects.isZoomEnabled
+            || effects.isLaserEnabled
             || !clicks.isEmpty
+            || !laserTrail.isEmpty
     }
 }
 
@@ -66,27 +86,55 @@ public final class CursorEffectBox: @unchecked Sendable {
     /// Upper bound on remembered clicks: a frame only spans a fraction of a
     /// second of ripple time, and bursts of clicks are dropped oldest-first.
     static let clickCapacity = 8
+    /// How long the laser trail keeps glowing.
+    static let trailWindow: TimeInterval = 0.75
+    /// Upper bound on remembered trail samples; movement can emit many
+    /// samples per second, so the tail is capped oldest-first.
+    static let trailCapacity = 64
 
     private let lock = NSLock()
     private var effects = CursorEffects()
     private var cursor: Point?
     private var clicks: [CursorClick] = []
+    private var laserTrail: [LaserSample] = []
 
     public init() {}
 
     /// Replaces the settings, keeping the live pointer and clicks around.
+    ///
+    /// Turning the laser off also forgets its trail: a stale tail would glow
+    /// again the moment the laser turns back on.
     public func updateEffects(_ effects: CursorEffects) {
         lock.lock()
         defer { lock.unlock() }
         self.effects = effects
+        if !effects.isLaserEnabled {
+            laserTrail.removeAll()
+        }
     }
 
     /// Updates the pointer position; `nil` forgets the previous one (tracking
     /// may stop providing locations, e.g. when Accessibility is revoked).
-    public func updateCursor(_ position: Point?) {
+    ///
+    /// While the laser is on this also appends a trail sample, fading and
+    /// capping the tail as it goes.
+    public func updateCursor(_ position: Point?, at now: Date = Date()) {
         lock.lock()
         defer { lock.unlock() }
         cursor = position
+        guard let position else {
+            // Tracking is gone; a trail pointing nowhere is worse than none.
+            laserTrail.removeAll()
+            return
+        }
+        guard effects.isLaserEnabled else { return }
+        laserTrail.removeAll {
+            now.timeIntervalSince($0.at) > Self.trailWindow
+        }
+        laserTrail.append(LaserSample(point: position, at: now))
+        if laserTrail.count > Self.trailCapacity {
+            laserTrail.removeFirst(laserTrail.count - Self.trailCapacity)
+        }
     }
 
     /// Records one click and prunes stale entries.
@@ -109,7 +157,8 @@ public final class CursorEffectBox: @unchecked Sendable {
         return CursorEffectFrame(
             effects: effects,
             cursor: cursor,
-            clicks: clicks
+            clicks: clicks,
+            laserTrail: laserTrail
         )
     }
 }

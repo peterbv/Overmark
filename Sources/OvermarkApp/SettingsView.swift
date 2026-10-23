@@ -215,6 +215,7 @@ struct SettingsView: View {
                 Toggle(L10n.tr("Pointer highlight"), isOn: $coordinator.cursorEffects.isHighlightEnabled)
                 Toggle(L10n.tr("Spotlight"), isOn: $coordinator.cursorEffects.isSpotlightEnabled)
                 Toggle(L10n.tr("Zoom lens"), isOn: $coordinator.cursorEffects.isZoomEnabled)
+                Toggle(L10n.tr("Laser Pointer"), isOn: $coordinator.cursorEffects.isLaserEnabled)
             }
 
             Section(L10n.tr("Pointer highlight customization")) {
@@ -299,6 +300,26 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+            }
+
+            Section(L10n.tr("Laser Pointer")) {
+                HStack(spacing: 8) {
+                    Text(L10n.tr("Dot colour"))
+                    ColorPalette(selection: $coordinator.cursorEffects.laserColor)
+                }
+
+                Slider(value: $coordinator.cursorEffects.laserRadius, in: 2...14, step: 1) {
+                    Text(L10n.tr("Dot size"))
+                } minimumValueLabel: {
+                    Text("2")
+                } maximumValueLabel: {
+                    Text("14")
+                }
+
+                Text(L10n.tr("The laser follows your pointer with a short glowing trail, on the overlay and burned into window recordings."))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)

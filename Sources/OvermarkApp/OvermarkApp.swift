@@ -158,6 +158,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 400_000_000)
             step("drawing key back to option")
 
+            // The laser pointer toggles like the other cursor effects: apply
+            // keeps the existing windows instead of rebuilding, and turning
+            // it off forgets the tail (box and views drop their trails).
+            coordinator.cursorEffects.isLaserEnabled = true
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            step("laser pointer on")
+            FileHandle.standardError.write(Data(
+                "[PROBE] laser: \(coordinator.cursorEffects.isLaserEnabled), radius \(coordinator.cursorEffects.laserRadius)\n".utf8
+            ))
+            coordinator.cursorEffects.isLaserEnabled = false
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("laser pointer off")
+
             await coordinator.toggleAnnotationMode()
             step("exitAnnotationMode")
             try? await Task.sleep(nanoseconds: 400_000_000)
