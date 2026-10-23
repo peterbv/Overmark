@@ -43,7 +43,7 @@
 | # | Idea | Prioridad | Estado | Notas |
 |---|---|---|---|---|
 | 5 | **Botón lápiz en la barra** | Alta | **Hecho** | Botón `pencil.tip` junto a pausa: bloquea el lápiz (cada clic dibuja, sin ⌥) / vuelve a requerir ⌥. El chip "captura todo" también alterna con un tap. |
-| 6 | **Tecla modificadora configurable** | Media | Propuesto | Elegir ⌥ / ⌃ / ⌘ en vez del ⌥ fijo. |
+| 6 | **Tecla modificadora configurable** | Media | **Hecho** | Preferencias → Herramientas: ⌥/⌃/⌘ como "tecla de dibujo" (persistida en `Overmark.drawingModifier`), aplicada en caliente — el tap de flagsChanged retargetea el bit, los lienzos re-chequean la máscara del evento vivo y el chip muestra el símbolo real. |
 | 7 | **Auto-borrado para formas y texto** | Media | Hecho | Hallazgo: formas y texto ya se desvanecían (la nota original era imprecisa). Cambio real: los números de paso entran al temporizador y el contador se vuelve monótono (piso que solo `limpiar`/restaurar reinician) para no reutilizar números ya mostrados. |
 
 ## 3. Infraestructura / calidad
@@ -74,6 +74,20 @@
 - **Multiventana de grabación**: grabar dos ventanas en paralelo.
 
 ## Registro de decisiones
+
+- **22 oct 2026** — **#6 hecho: tecla de dibujo configurable.** El ⌥ fijo
+  deja de estar hardcodeado: `DrawingModifier` (⌥/⌃/⌘, nuevo enum Core con
+  símbolo) persiste como preferencia separada (`Overmark.drawingModifier`)
+  para no perturbar el blob codificado de `ToolSettings` (un campo nuevo
+  habría descartado las preferencias del usuario por decode fallido). El
+  `OptionKeyMonitor` pasa a ser `ModifierKeyMonitor` con `setMask`
+  (retarget del bit rastreado sin remontar el tap); los lienzos re-chequean
+  `NSApp.currentEvent` contra la máscara elegida (`requiredModifier`). El
+  push en caliente: `drawingModifier.didSet` → `overlay.setDrawingModifier`
+  (+ push manual en el primer build, porque el `didSet` no corre en init).
+  El chip de la barra muestra el símbolo real (⌘ queda disponible con la
+  nota de que choca con los atajos de menú del app anfitrión mientras se
+  mantiene. Probe verifica la conmutación en vivo.
 
 - **22 oct 2026** — **#7 hecho: auto-borrado completo.** Hallazgo al
   implementar: formas y texto **ya** se desvanecían (la nota original del

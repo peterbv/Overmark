@@ -65,8 +65,10 @@ presentaciones, sin congelar el escritorio.
 - Superposiciones = **lienzos transparentes** sobre el escritorio vivo: nunca se ve
   una foto estática de la pantalla; las anotaciones se ven en el momento.
 - Modo de clics: por defecto los overlays **dejan pasar los clics** al Mac
-  (Dock, Finder, apps…). Mantené **⌥** para dibujar. Se puede cambiar a modo
-  "captura todo" en Preferencias → Herramientas. Si falta Accesibilidad, la barra
+  (Dock, Finder, apps…). Mantené la **tecla de dibujo** para anotar — **⌥**
+  por defecto, **⌃/⌘** seleccionables en Preferencias → Herramientas y
+  aplicadas en caliente (chip dinámico en la barra). Se puede cambiar a modo
+  "captura todo" en la misma pestaña. Si falta Accesibilidad, la barra
   muestra un chip ámbar **"modo de captura"** que abre los Ajustes al tocarlo.
 - **Alcance de la anotación**: la barra tiene un selector de pantallas —
   "Todas las pantallas" o solo una (útil con un proyector espejado: anotás en
@@ -80,8 +82,8 @@ presentaciones, sin congelar el escritorio.
   botón de grabación (rojo con cronómetro mientras graba; "terminando" deshabilitado;
   chip verde "Grabación guardada" que abre Finder al terminar), pausa, engranaje, "Listo".
 - **Lápiz de bloqueo** (`pencil.tip`, junto a pausa): un clic alterna entre
-  dibujar con cada clic (sin mantener ⌥) y el modo ⌥-dibujar; el chip "captura
-  todo" también alterna con un tap.
+  dibujar con cada clic (sin mantener la tecla de dibujo) y el modo
+  tecla-dibujar; el chip "captura todo" también alterna con un tap.
 - El ítem del menú de la barra tiene la misma pantalla de anotación como submenú
   con marcas de verificación (disponible estando en modo anotación).
 - **Arrastrable** por la banda de la parte superior y con **snap magnético a las 4 esquinas**.
@@ -131,8 +133,8 @@ presentaciones, sin congelar el escritorio.
   con un clic, ☑ del menú o ⌘⇧B cubre las pantallas del scope con un
   tablero opaco (blanco o negro, tono persistido en Preferencias →
   Herramientas → Pizarra) y anota encima sin ninguna app debajo.
-- Mientras la pizarra está en pantalla todo clic dibuja (el gate de ⌥ no
-  aplica); **pausar** (⌘⇧S) pliega el lienzo — el desktop vuelve a ser
+- Mientras la pizarra está en pantalla todo clic dibuja (el gate de la tecla
+  de dibujo no aplica); **pausar** (⌘⇧S) pliega el lienzo — el desktop vuelve a ser
   interactivo y al reanudar reaparece; **salir** la apaga para la próxima
   sesión. Cambiar el tono se aplica al instante, sin reconstruir ventanas.
 - Las capturas multi-monitor componen el relleno del tablero: copiar o
@@ -226,7 +228,15 @@ presentaciones, sin congelar el escritorio.
     limpia o se restaura un documento). Footnote de Auto-borrado y tests
     actualizados.
 
-`swift build` limpio · `swift test` verde: **109** pruebas Swift Testing (18 suites) +
+21. Tecla de dibujo configurable: el gate hold-to-draw se desacopla del
+    ⌥ fijo — **⌥/⌃/⌘** en Preferencias → Herramientas (persistido),
+    aplicado en caliente: el tap de flagsChanged cambia el bit rastreado
+    (`ModifierKeyMonitor.setMask`, renombrado desde `OptionKeyMonitor`), los
+    lienzos re-chequean `NSApp.currentEvent` contra la máscara elegida y el
+    chip de la barra muestra el símbolo real. Preferencia separada
+    (`Overmark.drawingModifier`) para no perturbar el blob de ToolSettings.
+
+`swift build` limpio · `swift test` verde: **114** pruebas Swift Testing (19 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
