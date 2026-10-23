@@ -395,6 +395,22 @@ struct AnnotationToolbarView: View {
                 reveal: { coordinator.revealLastRecording() }
             )
 
+            // The pencil latch: one click flips between drawing with every
+            // click (no modifier) and the hold-⌥-to-draw mode that the chips
+            // in the style row describe. Same ToolSettings flag the Settings
+            // pane toggles, so the overlay re-applies it live.
+            EffectButton(
+                systemImage: "pencil.tip",
+                isSelected: !coordinator.settings.holdOptionToDraw,
+                help: L10n.tr(
+                    !coordinator.settings.holdOptionToDraw
+                        ? "The pencil is latched: every click draws on the overlay. Click again to require ⌥ (Option) again."
+                        : "Latch the pencil: draw with every click instead of holding ⌥ (Option)."
+                )
+            ) {
+                coordinator.settings.holdOptionToDraw.toggle()
+            }
+
             AnnotationControlButton(
                 systemImage: coordinator.mode == .paused ? "play.fill" : "pause.fill"
             ) {
@@ -477,10 +493,12 @@ struct AnnotationToolbarView: View {
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.blue.opacity(0.22)))
                     .help(
-                        L10n.tr("The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here and turn \"Draw while holding ⌥\" back on.")
+                        L10n.tr("The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here to require ⌥ (Option) again.")
                     )
                     .onTapGesture {
-                        coordinator.onShowAppSettings?()
+                        // The pencil latch button toggles the same flag; this
+                        // tap flips back without the detour through Settings.
+                        coordinator.settings.holdOptionToDraw = true
                     }
             }
         }

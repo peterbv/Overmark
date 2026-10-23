@@ -100,10 +100,14 @@ public enum L10n {
         "Right-click deletes an annotation": "Clic derecho borra una anotación",
         "The overlay captures every click until Accessibility is granted (System Settings → Privacy & security → Accessibility). Press here to open it.":
             "El overlay captura todos los clics hasta que concedas Accesibilidad (Ajustes del Sistema → Privacidad y seguridad → Accesibilidad). Toca aquí para abrirla.",
-            "The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here and turn \"Draw while holding ⌥\" back on.":
-            "La capa captura todos los clics por elección. Usá pausa (⌘⇧S) para interactuar con otras apps, o tocá acá y reactivá \"Dibujar manteniendo ⌥\".",
+            "The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here to require ⌥ (Option) again.":
+            "La capa captura todos los clics por elección. Usá pausa (⌘⇧S) para interactuar con otras apps, o tocá acá para volver a requerir ⌥ (Opción).",
         "While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath.":
             "Con \"⌥ dibujar\" activo, solo los clics con ⌥ (Opción) mantenida dibujan sobre la capa; los demás clics van a la app que está debajo.",
+        "The pencil is latched: every click draws on the overlay. Click again to require ⌥ (Option) again.":
+            "El lápiz está bloqueado: cada clic dibuja sobre la capa. Tocá de nuevo para volver a requerir ⌥ (Opción).",
+        "Latch the pencil: draw with every click instead of holding ⌥ (Option).":
+            "Bloqueá el lápiz: dibujá con cada clic en vez de mantener ⌥ (Opción).",
 
         // Settings — tabs and tools.
         "General": "General",
