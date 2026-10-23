@@ -199,6 +199,9 @@ open build/Overmark.app
 
 ## Backlog conocido (no bloquea uso)
 
+> Las mejoras y funciones futuras viven en `ROADMAP.md` (hoja de ruta viva);
+> esta sección solo registra limitaciones conocidas de lo que está hecho.
+
 - Texto: los bounds guardados siguen siendo aproximados (por diseño: anclan
   hit-test generoso y el filtro de pantalla, no métricas exactas de glifos).
 - Sin persistencia de documentos (undo/limpiar + borrado por clic derecho
