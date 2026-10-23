@@ -16,6 +16,7 @@ public final class MenuBarController {
     public var onToggleAnnotation: (() -> Void)?
     public var onTogglePause: (() -> Void)?
     public var onToggleWhiteboard: (() -> Void)?
+    public var onToggleFreeze: (() -> Void)?
     public var onToggleRecording: (() -> Void)?
     public var onSelectPresentationScope: ((PresentationScope) -> Void)?
     public var onUndo: (() -> Void)?
@@ -50,6 +51,8 @@ public final class MenuBarController {
     ///     annotation-screen entry shows it with a checkmark.
     ///   - isWhiteboard: Whether the dedicated whiteboard is up; the
     ///     whiteboard entry shows it with a checkmark.
+    ///   - isFreeze: Whether the screen still is up; the freeze entry shows
+    ///     it with a checkmark.
     ///   - screenNames: The attached screens, for the annotation submenu.
     ///   - canUndo: Whether an undo step is available.
     ///   - canRedo: Whether a redo step is available.
@@ -58,6 +61,7 @@ public final class MenuBarController {
         isRecording: Bool = false,
         scope: PresentationScope = .all,
         isWhiteboard: Bool = false,
+        isFreeze: Bool = false,
         screenNames: [String] = [],
         canUndo: Bool,
         canRedo: Bool
@@ -68,6 +72,7 @@ public final class MenuBarController {
             isRecording: isRecording,
             scope: scope,
             isWhiteboard: isWhiteboard,
+            isFreeze: isFreeze,
             screenNames: screenNames,
             canUndo: canUndo,
             canRedo: canRedo
@@ -89,6 +94,7 @@ public final class MenuBarController {
         isRecording: Bool = false,
         scope: PresentationScope = .all,
         isWhiteboard: Bool = false,
+        isFreeze: Bool = false,
         screenNames: [String] = [],
         canUndo: Bool = false,
         canRedo: Bool = false
@@ -156,6 +162,15 @@ public final class MenuBarController {
             whiteboard.target = self
             whiteboard.state = isWhiteboard ? .on : .off
             menu.addItem(whiteboard)
+
+            let freeze = NSMenuItem(
+                title: L10n.tr("Freeze the screen"),
+                action: #selector(handleToggleFreeze),
+                keyEquivalent: ""
+            )
+            freeze.target = self
+            freeze.state = isFreeze ? .on : .off
+            menu.addItem(freeze)
         }
 
         menu.addItem(.separator())
@@ -219,6 +234,10 @@ public final class MenuBarController {
 
     @objc private func handleToggleWhiteboard() {
         onToggleWhiteboard?()
+    }
+
+    @objc private func handleToggleFreeze() {
+        onToggleFreeze?()
     }
 
     @objc private func handleToggleRecording() {

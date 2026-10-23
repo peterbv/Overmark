@@ -57,6 +57,16 @@ public final class OverlayController {
     /// the desktop interaction window works normally.
     private var isBoardVisible = true
 
+    /// Whether a captured still of the screens is currently covering the
+    /// panels (the screen freeze).
+    public private(set) var isFreezeActive = false
+    /// The frozen frame per display, keyed so every screen shows the frame
+    /// captured on it. Empty while the freeze is off.
+    private var freezeImages: [CGDirectDisplayID: CGImage] = [:]
+    /// Whether the frozen frame would currently be shown; pause folds it
+    /// away the same way as the whiteboard board.
+    private var isFreezeVisible = true
+
     /// The handler invoked when a canvas produces an annotation.
     private var onAnnotationCreated: ((Annotation) -> Void)?
     /// The handler invoked when the canvas is clicked.
@@ -162,6 +172,10 @@ public final class OverlayController {
             canvas.onClick = onClick
             canvas.onAnnotationEdit = onAnnotationEdit
             applyWhiteboard(to: canvas)
+            // Fresh canvases must come up with the frozen frame already in
+            // place when the session is frozen mid-view (a scope rebuild or
+            // a display change cannot blink the still away).
+            applyFreeze(to: screen.displayID, canvas: canvas)
 
             panel.contentView = canvas
             panel.presentAboveAll()
@@ -280,6 +294,39 @@ public final class OverlayController {
         canvas.boardColor = whiteboardStyle.color
     }
 
+    /// Switches the overlays between the see-through surface and a frozen
+    /// still of the screens.
+    ///
+    /// The freeze is an overlay state like the whiteboard: panels, gestures
+    /// and annotations are untouched, the canvases paint the captured frame
+    /// behind the marks and claim every click while it is up. The frames
+    /// arrive from the coordinator, which captures the displays in scope
+    /// with the app's own windows excluded.
+    public func setFreeze(_ active: Bool, images: [CGDirectDisplayID: CGImage]) {
+        isFreezeActive = active
+        freezeImages = active ? images : [:]
+        applyFreeze()
+        refreshMouseTransparency()
+    }
+
+    /// Folds the frozen frame away without turning the freeze off (used
+    /// while paused, like the whiteboard board).
+    public func setFreezeVisible(_ visible: Bool) {
+        isFreezeVisible = visible
+        applyFreeze()
+    }
+
+    /// Pushes the current freeze state to every canvas.
+    private func applyFreeze() {
+        for (displayID, entry) in entries {
+            applyFreeze(to: displayID, canvas: entry.canvas)
+        }
+    }
+
+    private func applyFreeze(to displayID: CGDirectDisplayID, canvas: AnnotationCanvasView) {
+        canvas.backdropImage = isFreezeVisible ? freezeImages[displayID] : nil
+    }
+
     /// Routes canvas callbacks to the given handlers.
     ///
     /// The handlers are stored, not just applied, because overlays are created
@@ -364,7 +411,8 @@ public final class OverlayController {
             "\($0.panel.ignoresMouseEvents ? "ignore" : "accept") drawOpt=\($0.canvas.holdOptionToDraw)"
         }.joined(separator: ", ")
         let board = " board=\(isWhiteboardActive ? whiteboardStyle.rawValue : "off") visible=\(isBoardVisible)"
-        return "[OVERLAY] \(mode)\(board) panels: [\(panels)]"
+        let freeze = " freeze=\(isFreezeActive ? (isFreezeVisible ? "on \(freezeImages.count)" : "folded") : "off")"
+        return "[OVERLAY] \(mode)\(board)\(freeze) panels: [\(panels)]"
     }
 
     /// Starts watching the drawing key for the hold-to-draw mode.
@@ -449,6 +497,11 @@ public final class OverlayController {
                 // The board replaces the screen contents: there is nothing
                 // underneath worth falling through to, so the canvas claims
                 // every click regardless of the drawing-key gate.
+                accepts = entry.canvas.isInteractionEnabled
+            } else if isFreezeActive && isFreezeVisible {
+                // The frozen frame also stands in for the screen contents;
+                // the only meaningful fallthrough target would be behind
+                // the still the user is annotating.
                 accepts = entry.canvas.isInteractionEnabled
             } else if isHoldKeyMode {
                 accepts = entry.canvas.isInteractionEnabled && isModifierHeld

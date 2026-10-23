@@ -12,6 +12,7 @@ enum HotKeyLabels {
         case .toggleAnnotation: return L10n.tr("Enter / end the presentation")
         case .togglePause: return L10n.tr("Pause")
         case .toggleWhiteboard: return L10n.tr("Whiteboard")
+        case .toggleFreezeScreen: return L10n.tr("Freeze the screen")
         case .toggleSpotlight: return L10n.tr("Spotlight")
         case .toggleHighlight: return L10n.tr("Pointer highlight")
         case .toggleZoom: return L10n.tr("Zoom lens")

@@ -311,5 +311,12 @@ public enum L10n {
             "Pizarra: cubrí las pantallas con un lienzo en blanco para dibujar, sin ninguna app debajo.",
         "The whiteboard is up: the screens show a blank board to draw on. Click again to go back to the see-through overlay over your apps.":
             "La pizarra ya está en pantalla: las pantallas muestran un lienzo en blanco para dibujar. Tocá de nuevo para volver a la capa transparente sobre tus apps.",
+
+        // Screen freeze.
+        "Freeze the screen": "Congelar la pantalla",
+        "Freeze the screen: draw over a still frame of the desktop while the apps underneath keep running.":
+            "Congelar la pantalla: dibujá sobre una imagen quieta del escritorio mientras las apps de abajo siguen corriendo.",
+        "The screen is frozen: the displays show a still frame. Click again to go back to the live desktop under the overlay.":
+            "La pantalla está congelada: las pantallas muestran una imagen quieta. Tocá de nuevo para volver al escritorio vivo debajo de la capa.",
     ]
 }

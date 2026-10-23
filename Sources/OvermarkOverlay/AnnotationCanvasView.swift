@@ -115,6 +115,19 @@ public final class AnnotationCanvasView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// The frozen frame painted behind the marks while the screen freeze
+    /// is up.
+    ///
+    /// Like the whiteboard board, the freeze is an overlay state: the panel,
+    /// gestures and annotations keep working exactly the same, only what the
+    /// pixels stand for changes — a captured still of the desktop instead of
+    /// the live contents underneath. The image covers the screen this canvas
+    /// belongs to, at that display's device-pixel resolution, and the canvas
+    /// scales it into its own bounds.
+    public var backdropImage: CGImage? {
+        didSet { needsDisplay = true }
+    }
+
     // MARK: - Tracking
 
     private var dragPoints: [Point] = []
@@ -150,6 +163,12 @@ public final class AnnotationCanvasView: NSView {
                 alpha: 1
             ))
             context.fill(bounds)
+        } else if let backdropImage {
+            // The frozen frame replaces the live screen: draw the captured
+            // still across the whole canvas. The context runs y-up in view
+            // space and CG images draw upright there, so the frame lands
+            // with its top row at the top of the screen.
+            context.draw(backdropImage, in: bounds)
         }
 
         // The view's coordinate space is already in points with the origin at
@@ -310,6 +329,13 @@ public final class AnnotationCanvasView: NSView {
         if isWhiteboard {
             // The board replaces the screen contents: every click belongs to
             // the canvas, bypassing the ⌥ gate entirely.
+            return super.hitTest(point)
+        }
+
+        if backdropImage != nil {
+            // The frozen frame stands in for the screen contents: same
+            // reasoning as the board, there is nothing underneath worth
+            // falling through to.
             return super.hitTest(point)
         }
 

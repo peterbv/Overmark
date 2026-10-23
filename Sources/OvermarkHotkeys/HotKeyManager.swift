@@ -12,6 +12,9 @@ public enum HotKeyAction: String, CaseIterable, Sendable {
     case togglePause
     /// Replace the screen contents with a blank board to draw on.
     case toggleWhiteboard
+    /// Show a captured still of the screen to annotate over and exclude the
+    /// live world underneath.
+    case toggleFreezeScreen
     /// Show or hide the spotlight effect.
     case toggleSpotlight
     /// Show or hide the cursor highlight.
@@ -85,6 +88,7 @@ public final class HotKeyManager {
         .toggleAnnotation: Binding(key: .a, modifiers: [.command, .shift]),
         .togglePause: Binding(key: .s, modifiers: [.command, .shift]),
         .toggleWhiteboard: Binding(key: .b, modifiers: [.command, .shift]),
+        .toggleFreezeScreen: Binding(key: .p, modifiers: [.command, .shift]),
         .toggleSpotlight: Binding(key: .d, modifiers: [.command, .shift]),
         .toggleHighlight: Binding(key: .f, modifiers: [.command, .shift]),
         .toggleZoom: Binding(key: .g, modifiers: [.command, .shift]),

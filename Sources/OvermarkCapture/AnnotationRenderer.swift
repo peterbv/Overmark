@@ -122,17 +122,22 @@ public enum AnnotationCompositor {
     ///     whiteboard, whose board is not part of any capture (Overmark's own
     ///     windows are excluded from them) yet is exactly what the audience
     ///     saw.
+    ///   - frozen: An optional frame image that replaces the screenshot —
+    ///     used by the screen freeze, which shows a captured still instead of
+    ///     the live desktop. It wins over `backdrop` when both are answered;
+    ///     the session never shows both at once.
     /// - Returns: A new image with the annotations drawn on top.
     public static func composited(
         image: CGImage,
         annotations: [Annotation],
         screen: ScreenFrame,
-        backdrop: CGColor? = nil
+        backdrop: CGColor? = nil,
+        frozen: CGImage? = nil
     ) -> CGImage {
         // Only the annotations that belong to this display are drawn, so a
         // multi-monitor setup does not paint one screen's marks on another.
         let relevant = annotations.filter { screen.frame.contains($0.bounds.center) }
-        guard !relevant.isEmpty || backdrop != nil else { return image }
+        guard !relevant.isEmpty || backdrop != nil || frozen != nil else { return image }
 
         let width = image.width
         let height = image.height
@@ -149,7 +154,13 @@ public enum AnnotationCompositor {
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
         ) else { return image }
 
-        if let backdrop {
+        if let frozen {
+            // The frozen frame replaces the capture outright: the audience
+            // watched a still image, so the screenshot copies and saves the
+            // still. The frame hails from the same full-resolution capture
+            // pipeline, so it fills the destination 1:1.
+            context.draw(frozen, in: CGRect(x: 0, y: 0, width: width, height: height))
+        } else if let backdrop {
             // The board replaces the screen contents: paint the flat colour
             // instead of the capture, at device-pixel resolution.
             context.setFillColor(backdrop)
@@ -202,11 +213,15 @@ public enum AnnotationCompositor {
     ///     whiteboard up on this display?" with the board colour, or `nil`
     ///     when the display shows the plain overlay. The answered colour
     ///     replaces the capture of that display.
+    ///   - frozenFill: An optional resolver answering "is the screen frozen
+    ///     on this display?" with the frozen frame image, or `nil` when it
+    ///     shows the live overlay. The answered image replaces the capture.
     /// - Returns: The stitched desktop image, or `nil` with no snapshots.
     public static func desktopImage(
         from snapshots: [DisplayPiece],
         annotations: [Annotation],
-        boardFill: ((ScreenFrame) -> CGColor?)? = nil
+        boardFill: ((ScreenFrame) -> CGColor?)? = nil,
+        frozenFill: ((ScreenFrame) -> CGImage?)? = nil
     ) -> CGImage? {
         guard !snapshots.isEmpty else { return nil }
         guard snapshots.count > 1 else {
@@ -215,7 +230,8 @@ public enum AnnotationCompositor {
                 image: snapshot.image,
                 annotations: annotations,
                 screen: snapshot.screen,
-                backdrop: boardFill?(snapshot.screen)
+                backdrop: boardFill?(snapshot.screen),
+                frozen: frozenFill?(snapshot.screen)
             )
         }
 
@@ -249,7 +265,8 @@ public enum AnnotationCompositor {
                 image: snapshot.image,
                 annotations: annotations,
                 screen: snapshot.screen,
-                backdrop: boardFill?(snapshot.screen)
+                backdrop: boardFill?(snapshot.screen),
+                frozen: frozenFill?(snapshot.screen)
             )
             let frame = snapshot.screen.frame
             // AppKit points and Core Graphics points both run bottom-up, so

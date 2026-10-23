@@ -23,7 +23,9 @@ public final class AppCoordinator: ObservableObject {
             overlay.setInteractionEnabled(mode.allowsDrawing)
             // Pausing folds the board away so the desktop interaction window
             // behaves normally; the whiteboard returns with the session.
+            // The frozen frame folds the same way.
             overlay.setBoardVisible(mode != .paused)
+            overlay.setFreezeVisible(mode != .paused)
         }
     }
 
@@ -68,6 +70,23 @@ public final class AppCoordinator: ObservableObject {
             overlay.setWhiteboard(isWhiteboardActive, style: whiteboardStyle)
         }
     }
+
+    /// Whether the screens show a frozen frame instead of the live desktop.
+    ///
+    /// Like the board, the freeze is an overlay state inside the running
+    /// session: the coordinator captures the displays in scope once, hands
+    /// the frames to the overlays and the canvases paint them behind the
+    /// marks, so the backdrop stands still while the apps underneath keep
+    /// running. Pausing folds it away like the board; exiting the session
+    /// drops it.
+    @Published public private(set) var isFreezeActive = false {
+        didSet { overlay.setFreeze(isFreezeActive, images: freezeImages) }
+    }
+
+    /// The frozen frames per display, kept next to the overlay's own copies
+    /// so copies and saves can answer "what did the audience see" without
+    /// touching the live screen.
+    private var freezeImages: [CGDirectDisplayID: CGImage] = [:]
 
     /// The key the user holds to draw while the hold-to-draw gate is on
     /// (⌥ by default, ⌃/⌘ selectable); persists between launches.
@@ -568,6 +587,10 @@ public final class AppCoordinator: ObservableObject {
         // The board is a state of the running session: leaving it up would
         // surprise the next session, since the panels rebuild honouring it.
         isWhiteboardActive = false
+        // So is the frozen frame: a next session starts over the live
+        // desktop, not over yesterday's still.
+        freezeImages = [:]
+        isFreezeActive = false
         // ESC is the guaranteed exit, and that promise extends to the
         // recording: ending a session never loses the file — it is
         // finalized here and announced when done.
@@ -611,6 +634,79 @@ public final class AppCoordinator: ObservableObject {
     public func toggleWhiteboard() {
         guard mode != .idle else { return }
         isWhiteboardActive.toggle()
+        guard isWhiteboardActive else { return }
+        // One surface cannot be both a blank board and a frozen frame:
+        // raising the board drops the freeze.
+        if isFreezeActive {
+            freezeImages = [:]
+            isFreezeActive = false
+        }
+    }
+
+    /// Switches the session between the live overlay and a frozen frame of
+    /// the screen.
+    ///
+    /// Only meaningful while a session is up: freezing captures every
+    /// display in scope once and shows those frames instead of the live
+    /// desktop, so the backdrop stands still while the apps underneath keep
+    /// running. Annotations, the modifier gate and pausing behave exactly
+    /// as with the board. Toggling the board ends the freeze and vice
+    /// versa: one screen cannot be both a blank board and a frozen frame.
+    public func toggleFreeze() async {
+        guard mode != .idle else { return }
+        if isFreezeActive {
+            freezeImages = [:]
+            isFreezeActive = false
+            return
+        }
+        if isWhiteboardActive {
+            // Same exclusion, the other way around: the still replaces the
+            // blank board.
+            isWhiteboardActive = false
+        }
+        let displays = overlay.scopeDisplayIDs ?? Self.attachedDisplayIDs()
+        var images: [CGDirectDisplayID: CGImage] = [:]
+        for displayID in displays {
+            if let snapshot = try? await captureService.capture(displayID: displayID) {
+                images[displayID] = snapshot.image
+            }
+        }
+        guard !images.isEmpty else {
+            // Nothing captured: the Screen Recording permission is missing
+            // or no display answered. The overlay stays live instead of
+            // silently freezing to black.
+            lastError = L10n.tr("Overmark needs Screen Recording access to capture the screen.")
+            return
+        }
+        freezeImages = images
+        // Flipping the published flag last hands the frames to the overlays
+        // from a complete dictionary.
+        isFreezeActive = true
+    }
+
+    /// The frozen frame shown on a display, or `nil` when that display
+    /// shows the plain see-through overlay.
+    ///
+    /// Screenshots exclude Overmark's own windows, so the frozen overlay
+    /// never reaches the capture; answering here is what makes copies and
+    /// saves match what the audience saw.
+    private func frozenImage(for screen: ScreenFrame) -> CGImage? {
+        guard isFreezeActive, mode != .paused else { return nil }
+        let displayID = NSScreen.screens.first { candidate in
+            abs(candidate.frame.origin.x - screen.origin.x) < 1
+                && abs(candidate.frame.origin.y - screen.origin.y) < 1
+        }.flatMap(Self.displayID(of:))
+        guard let displayID else { return nil }
+        if let allowed = overlay.scopeDisplayIDs, !allowed.contains(displayID) {
+            return nil
+        }
+        return freezeImages[displayID]
+    }
+
+    /// The display ids of every attached screen, resolved without the
+    /// Screen Recording permission (AppKit enumeration only).
+    private static func attachedDisplayIDs() -> Set<CGDirectDisplayID> {
+        Set(NSScreen.screens.compactMap(Self.displayID(of:)))
     }
 
     // MARK: - Presentation scope
@@ -840,7 +936,8 @@ public final class AppCoordinator: ObservableObject {
                 AnnotationCompositor.DisplayPiece(image: $0.image, screen: $0.screen)
             },
             annotations: document.annotations,
-            boardFill: { [self] screen in boardCGColor(for: screen) }
+            boardFill: { [self] screen in boardCGColor(for: screen) },
+            frozenFill: { [self] screen in frozenImage(for: screen) }
         )
     }
 
@@ -879,6 +976,8 @@ public final class AppCoordinator: ObservableObject {
             togglePause()
         case .toggleWhiteboard:
             toggleWhiteboard()
+        case .toggleFreezeScreen:
+            Task { await toggleFreeze() }
         case .toggleSpotlight:
             cursorEffects.isSpotlightEnabled.toggle()
         case .toggleHighlight:

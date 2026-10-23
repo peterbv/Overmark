@@ -236,6 +236,65 @@ struct AnnotationCompositorTests {
         return context.makeImage()!
     }
 
+    // MARK: - Screen freeze
+
+    @Test("The frozen frame replaces the capture")
+    func frozenFrameReplacesTheCapture() {
+        let capture = solidImage(red, width: 200, height: 100)
+        let frame = solidImage(white, width: 200, height: 100)
+
+        let result = AnnotationCompositor.composited(
+            image: capture,
+            annotations: [],
+            screen: screen,
+            frozen: frame
+        )
+
+        // The still is what the audience saw: every pixel of the output is
+        // the frozen frame, the live capture is dropped even though the
+        // canvas carries no annotation.
+        let pixels = rawPixels(of: result)
+        let topLeft = pixel(of: pixels, width: result.width, row: 2, column: 5)
+        #expect(topLeft.r > 200)
+        #expect(topLeft.g > 200)
+        #expect(topLeft.b > 200)
+    }
+
+    @Test("The frozen frame clears the board colour when both are answered")
+    func frozenFrameWinsOverTheBoardFill() {
+        let capture = whiteImage(width: 200, height: 100)
+        let frame = solidImage(red, width: 200, height: 100)
+
+        let result = AnnotationCompositor.composited(
+            image: capture,
+            annotations: [],
+            screen: screen,
+            backdrop: CGColor(red: 0, green: 1, blue: 0, alpha: 1),
+            frozen: frame
+        )
+
+        // The session never shows a board and a still at once; if both
+        // resolvers answer, the frozen frame is the one that applied.
+        let pixels = rawPixels(of: result)
+        let centre = pixel(of: pixels, width: result.width, row: 50, column: 100)
+        #expect(centre.r > 200)
+        #expect(centre.g < 100)
+    }
+
+    @Test("With no frozen frame and no board the capture survives untouched")
+    func nothingToCompositeKeepsTheCapture() {
+        let image = whiteImage(width: 200, height: 100)
+
+        let result = AnnotationCompositor.composited(
+            image: image,
+            annotations: [],
+            screen: screen,
+            frozen: nil
+        )
+
+        #expect(result === image)
+    }
+
     // MARK: - Desktop stitching (multi-monitor)
 
     private let white = CGColor(red: 1, green: 1, blue: 1, alpha: 1)

@@ -456,6 +456,22 @@ struct AnnotationToolbarView: View {
             // The dedicated whiteboard: while it is up the screens in scope
             // show a blank surface instead of the desktop, and every click
             // draws — same overlay session, no mode switch.
+            // The frozen frame: while it is up the screens show a captured
+            // still instead of the live desktop, and every click draws on
+            // it while the apps underneath keep running. Same overlay
+            // session, no mode switch.
+            EffectButton(
+                systemImage: "snowflake",
+                isSelected: coordinator.isFreezeActive,
+                help: L10n.tr(
+                    coordinator.isFreezeActive
+                        ? "The screen is frozen: the displays show a still frame. Click again to go back to the live desktop under the overlay."
+                        : "Freeze the screen: draw over a still frame of the desktop while the apps underneath keep running."
+                )
+            ) {
+                Task { await coordinator.toggleFreeze() }
+            }
+
             EffectButton(
                 systemImage: "rectangle.inset.filled",
                 isSelected: coordinator.isWhiteboardActive,

@@ -150,6 +150,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 300_000_000)
             step("whiteboard off")
 
+            // The screen freeze captures the displays in scope and paints
+            // the stills behind the canvases; both states exclude each
+            // other, so freezing right after the whiteboard round-trips the
+            // handoff in both directions. Unfreezing drops the stills for
+            // the remainder of the session.
+            await coordinator.toggleFreeze()
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            step("freeze on (captures and paints stills)")
+            FileHandle.standardError.write(Data(
+                "[PROBE] freeze: active=\(coordinator.isFreezeActive) (inactive means this build lacks the Screen Recording grant; still-frame plumbing is verified by the compositing tests)\n".utf8
+            ))
+            FileHandle.standardError.write(Data("\(coordinator.debugOverlayState())\n".utf8))
+            coordinator.toggleWhiteboard()
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("board replaces the freeze")
+            FileHandle.standardError.write(Data("\(coordinator.debugOverlayState())\n".utf8))
+            await coordinator.toggleFreeze()
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("freeze replaces the board")
+            FileHandle.standardError.write(Data("\(coordinator.debugOverlayState())\n".utf8))
+            await coordinator.toggleFreeze()
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("freeze off (still frame dropped)")
+
             coordinator.drawingModifier = .control
             try? await Task.sleep(nanoseconds: 400_000_000)
             step("drawing key switched to control in place")
@@ -239,6 +263,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.onToggleWhiteboard = { [weak self] in
             self?.coordinator.toggleWhiteboard()
         }
+        menuBar.onToggleFreeze = { [weak self] in
+            Task { await self?.coordinator.toggleFreeze() }
+        }
         menuBar.onUndo = { [weak self] in
             self?.coordinator.undo()
         }
@@ -273,6 +300,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isRecording: coordinator.recordingState.isActive,
             scope: coordinator.presentationScope,
             isWhiteboard: coordinator.isWhiteboardActive,
+            isFreeze: coordinator.isFreezeActive,
             screenNames: coordinator.screenNames,
             canUndo: coordinator.document.canUndo,
             canRedo: coordinator.document.canRedo
