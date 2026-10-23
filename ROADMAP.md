@@ -26,6 +26,8 @@
   la barra; recuperación automática cuando Accesibilidad vuelve.
 - Capturas multi-monitor (copiar / guardar), grabación de ventana en vivo
   (burn-in de anotaciones + efectos de cursor), DMG firmado ad-hoc.
+- Exportación desde el menú: la sesión actual (con anotaciones, pizarra y
+  freeze compuestos) sale como PNG o PDF de una página.
 - Pizarra dedicada como estado del overlay (sesión activa, ☑ en menú y
   barra, ⌘⇧B) con tono blanco/negro persistido; pausa pliega el lienzo
   y las capturas componen el relleno del tablero.
@@ -35,7 +37,8 @@
 - Selección de anotaciones (botón en la barra): marquee por intersección,
   arrastrar mueve con clamp a la pantalla, la paleta recolorea, la basura
   borra lo seleccionado; un solo undo por gesto.
-- 154 tests (22 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
+- 158 tests (23 suites Swift Testing, incluida "Graphics export") + 24
+  XCTest — verdes en cada cambio.
 
 ## 1. Funciones nuevas (mayor valor)
 
@@ -48,6 +51,7 @@
 | 11 | **Puntero láser** | Alta | **Hecho** | Migrado del banco de ideas. Punto brillante + rastro que se apaga en ~0,7 s; toggle `cursorarrow.rays` en la barra y en Settings → Cursor (color y tamaño 2–14 pt). Quemado en la grabación de ventana por el mismo camino que el resto de los efectos. Codificación resiliente: el decode de `CursorEffects` ya no descarta el blob viejo cuando aparecen campos nuevos. |
 | 12 | **Congelar pantalla** | Media | **Hecho** | Migrado del banco de ideas. Estado del overlay (hermano de la pizarra): captura una vez cada pantalla del scope (sin ventanas propias) y las canvases pintan ese still detrás de las anotaciones — el fondo queda quieto mientras las apps de abajo siguen corriendo. Botón `snowflake` en la barra, ☑ en menú, ⌘⇧P. Excluyente con la pizarra en ambos sentidos; pausa pliega el still; capturas componen el frame congelado; salir de la sesión lo suelta. |
 | 13 | **Mover y recolorear anotaciones (marquee)** | Media | **Hecho** | Migrado del banco de ideas. Botón de selección en la barra: marquee por intersección de límites; arrastrar una selección la mueve con clamp a la pantalla; la paleta recolorea la selección (color sólido, limpia gradiente); la basura borra lo seleccionado (si no hay selección limpia todo). Un solo undo por gesto (batch `update`/`remove(id:)`). Pasa a dibujar (elegir herramienta) limpia la selección. |
+| 14 | **Exportar PNG/PDF de la sesión** | Media | **Hecho** | Migrado del banco de ideas. Ítems "Export PNG…/Export PDF…" en el menú (al lado de Save Screenshot…): el compositor ya produce la imagen final (anotaciones + pizarra + freeze) y `GraphicsExport` (CG-puro, testeado) la envuelve en PNG (ImageIO) o PDF de una página (CGPDFContext, página blanca para que los visores no pinten alpha como negro). NSSavePanel con nombre `Overmark-fecha`; sin hotkeys esta ronda. GIF animado sigue en el banco por peso (SCStream→GIF). |
 
 ## 2. Mejoras rápidas (una sesión cada una)
 
@@ -67,7 +71,8 @@
 
 ## 4. Banco de ideas (sin compromiso, a evaluar)
 
-- **Exportar**: PNG/PDF de la sesión actual; GIF corto del overlay animado.
+- **Exportar GIF**: GIF corto del overlay animado (PNG/PDF ya son Hecho; el
+  GIF queda por peso técnico: convertir el stream a GIF eficientemente).
 - **Sellos/símbolos**: stamps de check, ✗, flechas curvas, emojis.
 - **Temporizador en pantalla**: cuenta regresiva visible durante presentaciones.
 - **Borrador por arrastre**: borrar trazos con un gesto continuo.
@@ -79,9 +84,22 @@
 
 ## Registro de decisiones
 
+- **23 oct 2026** — **#14 hecho: exportar PNG/PDF de la sesión.** Piezas: (1)
+  `GraphicsExport` en Capture, CG-puro y testeado — `pngData` (ImageIO
+  con destino en memoria) y `pdfData` (CGPDFContext sobre `CGDataConsumer`,
+  pinta primero la página de blanco porque los visores de PDF muestran el
+  alpha como negro, y dibuja la imagen). (2) El compositor ya entrega la
+  imagen final con todo compuesto — el export reusa `captureDesktopImage()`
+  sin duplicar nada. (3) Coordinator: `exportPNG()/exportPDF()` con
+  NSSavePanel (`UTType.png/.pdf`, nombre `Overmark-fecha`, escritura
+  atómica) y errores a `lastError`. (4) Menú: ítems junto a Save
+  Screenshot…; sin hotkeys (paridad con esa acción). Tests: firma y
+  round-trip de PNG, header `%PDF` y una sola página vía PDFKit. El GIF
+  animado del banco queda por evaluar por peso (SCStream→GIF).
+
 - **23 oct 2026** — **#13 hecho: mover y recolorear anotaciones (marquee).**
   Estado de sesión del overlay (mismo patrón que pizarra/freeze): el botón
-  de selecciónSGlobal en la barra activa `isSelectionMode` y el canvas rutea
+  de selección en la barra activa `isSelectionMode` y el canvas rutea
   los gestos por su cuenta (marquee por intersección de límites, arrastre
   de selección con clamp para no salir de la pantalla, sin dibujar). El
   recolor sale barato: la paleta ya persiste en settings, así que el

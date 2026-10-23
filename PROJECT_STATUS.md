@@ -178,8 +178,24 @@ presentaciones, sin congelar el escritorio.
 - Elegir una herramienta de dibujo o apagar el modo limpia la selección;
   también se poda sola si el documento cambia debajo.
 
+### Exportar PNG/PDF de la sesión
+- Ítems **Export PNG… / Export PDF…** en el menú (junto a Save Screenshot…).
+  La imagen ya sale compuesta del mismo camino que las capturas
+  (`captureDesktopImage` → anotaciones + relleno de pizarra + frame
+  congelado).
+- `GraphicsExport` en Capture, CG-puro y testeado: `pngData` (ImageIO) y
+  `pdfData` (CGPDFContext: página blanca primero para que los visores no
+  pinten el alpha como negro, luego la imagen del tamaño exacto en
+  píxeles).
+- Coordinator: `exportPNG()/exportPDF()` con NSSavePanel (`UTType`
+  correcto, nombre `Overmark-fecha`, escritura atómica) — los fallos de
+  captura/codificado/guardado avisan por el mismo canal de errores que
+  el resto de la app.
+- Sin hotkeys esta ronda (paridad con Save Screenshot); el GIF animado
+  quedará en el banco por peso técnico (SCStream→GIF).
+
 ### Extras
-- **Español por defecto**, inglés y automático; cammbio en Preferencias → General → Idioma
+- **Español por defecto**, inglés y automático; cambio en Preferencias → General → Idioma
   (se persiste). Toda la UI traducida (menú, barra, ajustes, onboarding, editor, errores).
 - Icono generado por código (Scripts/make-icon.swift): monitor + degradado índigo→violeta.
 - Permisos honestos: estado **Denegado** visible (ya no se confunde con "Sin configurar").
@@ -339,8 +355,17 @@ presentaciones, sin congelar el escritorio.
     undo del gesto completo es un solo paso; sin "shift-click", sin menú
     ni hotkey esta ronda.
 
-`swift build` limpio · `swift test` verde: **154** pruebas Swift Testing (22 suites) +
-**24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
+28. Exportar PNG/PDF de la sesión (migrado del banco): `GraphicsExport`
+    CG-puro (PNG por ImageIO; PDF de una página con fondo blanco y la
+    imagen del tamaño exacto), reusando la imagen ya compuesta por el
+    compositor. Menú con dos ítems y NSSavePanel (`UTType`, nombre
+    `Overmark-fecha`, escritura atómica); errores a `lastError`. Sin
+    hotkeys; el GIF animado queda por evaluar del lado del banco. 4
+    tests nuevos (firma y round-trip del PNG, header `%PDF` y una sola
+    página vía PDFKit).
+
+`swift build` limpio · `swift test` verde: **158** pruebas Swift Testing (23 suites, incluida
+"Graphics export") + **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
 
