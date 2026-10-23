@@ -19,7 +19,12 @@ import SwiftUI
 public final class AppCoordinator: ObservableObject {
     /// The current app mode.
     @Published public private(set) var mode: AppMode = .idle {
-        didSet { overlay.setInteractionEnabled(mode.allowsDrawing) }
+        didSet {
+            overlay.setInteractionEnabled(mode.allowsDrawing)
+            // Pausing folds the board away so the desktop interaction window
+            // behaves normally; the whiteboard returns with the session.
+            overlay.setBoardVisible(mode != .paused)
+        }
     }
 
     /// The annotations and their undo history.
@@ -36,6 +41,24 @@ public final class AppCoordinator: ObservableObject {
 
     /// Documents saved to the archive, newest first.
     @Published public private(set) var savedDocuments: [SessionArchive.Entry] = []
+
+    /// Whether the dedicated whiteboard is currently covering the screens.
+    ///
+    /// The board is an overlay state inside the running session, not a
+    /// separate mode: while the session is up, this folds the desktop away
+    /// and draws a blank board instead.
+    @Published public private(set) var isWhiteboardActive = false {
+        didSet { overlay.setWhiteboard(isWhiteboardActive, style: whiteboardStyle) }
+    }
+
+    /// The tone the whiteboard surface is painted with; persists between
+    /// launches.
+    @Published public var whiteboardStyle: BoardStyle = .white {
+        didSet {
+            PreferencesStore.save(whiteboardStyle)
+            overlay.setWhiteboard(isWhiteboardActive, style: whiteboardStyle)
+        }
+    }
 
     /// Debounced autosave; cancelled and rescheduled as the document churns.
     private var autosaveTask: Task<Void, Never>?
@@ -206,6 +229,7 @@ public final class AppCoordinator: ObservableObject {
         settings = PreferencesStore.loadToolSettings()
         favoriteColors = PreferencesStore.loadFavoriteColors()
         cursorEffects = PreferencesStore.loadCursorEffects()
+        whiteboardStyle = PreferencesStore.loadWhiteboardStyle()
 
         hotKeys.onAction = { [weak self] action in
             self?.handle(action)
@@ -511,6 +535,9 @@ public final class AppCoordinator: ObservableObject {
         hotKeys.unregisterEscape()
         overlay.tearDown()
         mode = .idle
+        // The board is a state of the running session: leaving it up would
+        // surprise the next session, since the panels rebuild honouring it.
+        isWhiteboardActive = false
         // ESC is the guaranteed exit, and that promise extends to the
         // recording: ending a session never loses the file — it is
         // finalized here and announced when done.
@@ -541,6 +568,19 @@ public final class AppCoordinator: ObservableObject {
         case .paused:
             mode = .annotating
         }
+    }
+
+    /// Switches the session between the see-through overlay and the
+    /// dedicated whiteboard.
+    ///
+    /// Only meaningful while a session is up: with the board on, the screens
+    /// in scope show a blank surface to draw on instead of the desktop, and
+    /// every click goes to the canvas. Pausing temporarily folds the board
+    /// back to the desktop view, and exiting the session turns it off for
+    /// the next one.
+    public func toggleWhiteboard() {
+        guard mode != .idle else { return }
+        isWhiteboardActive.toggle()
     }
 
     // MARK: - Presentation scope
@@ -764,7 +804,34 @@ public final class AppCoordinator: ObservableObject {
             from: snapshots.map {
                 AnnotationCompositor.DisplayPiece(image: $0.image, screen: $0.screen)
             },
-            annotations: document.annotations
+            annotations: document.annotations,
+            boardFill: { [self] screen in boardCGColor(for: screen) }
+        )
+    }
+
+    /// The whiteboard colour to composite over a display's capture, or `nil`
+    /// when that display shows the plain see-through overlay.
+    ///
+    /// Screenshots exclude Overmark's own windows, so the board itself never
+    /// reaches the capture; answering here is what makes copies and saves
+    /// match what the audience saw.
+    private func boardCGColor(for screen: ScreenFrame) -> CGColor? {
+        guard isWhiteboardActive, mode != .paused else { return nil }
+        // Resolve the display the frame belongs to, then clip to the
+        // annotation scope the session was rebuilt with.
+        let displayID = NSScreen.screens.first { candidate in
+            abs(candidate.frame.origin.x - screen.origin.x) < 1
+                && abs(candidate.frame.origin.y - screen.origin.y) < 1
+        }.flatMap(Self.displayID(of:))
+        if let allowed = overlay.scopeDisplayIDs, let displayID,
+           !allowed.contains(displayID) {
+            return nil
+        }
+        return CGColor(
+            red: CGFloat(whiteboardStyle.color.red),
+            green: CGFloat(whiteboardStyle.color.green),
+            blue: CGFloat(whiteboardStyle.color.blue),
+            alpha: 1
         )
     }
 
@@ -775,6 +842,8 @@ public final class AppCoordinator: ObservableObject {
             Task { await toggleAnnotationMode() }
         case .togglePause:
             togglePause()
+        case .toggleWhiteboard:
+            toggleWhiteboard()
         case .toggleSpotlight:
             cursorEffects.isSpotlightEnabled.toggle()
         case .toggleHighlight:

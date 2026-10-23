@@ -104,6 +104,24 @@ public enum ZoomShape: String, Hashable, Sendable, Codable, CaseIterable, Identi
     public var id: String { rawValue }
 }
 
+/// The tone of the dedicated whiteboard surface.
+///
+/// The whiteboard replaces the screen contents with a blank board for the
+/// length of the annotation session; the tone chooses what that board looks
+/// like — a bright board for classrooms on projectors, a dark one for code
+/// walk-throughs on OLED-friendly setups.
+public enum BoardStyle: String, Hashable, Sendable, Codable, CaseIterable, Identifiable {
+    case white
+    case black
+
+    public var id: String { rawValue }
+
+    /// The surface colour of the board.
+    public var color: Color {
+        self == .white ? .white : .black
+    }
+}
+
 /// The tools and styles the user has selected.
 public struct ToolSettings: Hashable, Sendable, Codable {
     public var tool: AnnotationTool

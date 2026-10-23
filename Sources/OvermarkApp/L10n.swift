@@ -286,5 +286,17 @@ public enum L10n {
         "Restore": "Restaurar",
         "Delete": "Eliminar",
         "1 annotation": "1 anotación",
+
+        // Whiteboard.
+        "Whiteboard": "Pizarra",
+        "Board tone": "Tono de la pizarra",
+        "White": "Blanco",
+        "Black": "Negro",
+        "The board's colour. Choose the tone that reads best over your projector or with your recording setup.":
+            "El color de la pizarra. Elegí el tono que lea mejor sobre tu proyector o con tu configuración de grabación.",
+        "Whiteboard: cover the screens with a blank board to draw on, without an app underneath.":
+            "Pizarra: cubrí las pantallas con un lienzo en blanco para dibujar, sin ninguna app debajo.",
+        "The whiteboard is up: the screens show a blank board to draw on. Click again to go back to the see-through overlay over your apps.":
+            "La pizarra ya está en pantalla: las pantallas muestran un lienzo en blanco para dibujar. Tocá de nuevo para volver a la capa transparente sobre tus apps.",
     ]
 }

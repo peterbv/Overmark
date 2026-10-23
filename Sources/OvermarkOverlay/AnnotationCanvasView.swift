@@ -89,6 +89,23 @@ public final class AnnotationCanvasView: NSView {
     /// owns every click outside the menu bar strip and ⌥ is not required.
     public var holdOptionToDraw = false
 
+    /// Whether the canvas paints a blank board instead of letting the screen
+    /// underneath show through.
+    ///
+    /// The dedicated whiteboard is an overlay state, not a separate mode: the
+    /// panel, gestures and annotations keep working exactly the same, only the
+    /// pixels behind the marks become an opaque board. While the board is up
+    /// the canvas claims every click — there is nothing underneath that is
+    /// worth falling through to.
+    public var isWhiteboard = false {
+        didSet { needsDisplay = true }
+    }
+
+    /// The surface colour of the whiteboard.
+    public var boardColor: Color = .white {
+        didSet { needsDisplay = true }
+    }
+
     // MARK: - Tracking
 
     private var dragPoints: [Point] = []
@@ -112,6 +129,19 @@ public final class AnnotationCanvasView: NSView {
 
     public override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
+
+        if isWhiteboard {
+            // Paint the dedicated board first: an opaque surface standing in
+            // for the screen snapshot that normally sits (invisibly) behind
+            // the panel.
+            context.setFillColor(CGColor(
+                red: CGFloat(boardColor.red),
+                green: CGFloat(boardColor.green),
+                blue: CGFloat(boardColor.blue),
+                alpha: 1
+            ))
+            context.fill(bounds)
+        }
 
         // The view's coordinate space is already in points with the origin at
         // the bottom-left, matching the screen space the annotations use. The
@@ -266,6 +296,12 @@ public final class AnnotationCanvasView: NSView {
             if inScreen.origin.y > maxY - menuBarHeight {
                 return nil
             }
+        }
+
+        if isWhiteboard {
+            // The board replaces the screen contents: every click belongs to
+            // the canvas, bypassing the ⌥ gate entirely.
+            return super.hitTest(point)
         }
 
         if holdOptionToDraw {

@@ -171,6 +171,19 @@ struct SettingsView: View {
                 }
             }
 
+            Section(L10n.tr("Whiteboard")) {
+                Picker(L10n.tr("Board tone"), selection: $coordinator.whiteboardStyle) {
+                    Text(L10n.tr("White")).tag(BoardStyle.white)
+                    Text(L10n.tr("Black")).tag(BoardStyle.black)
+                }
+                .pickerStyle(.segmented)
+
+                Text(L10n.tr("The board's colour. Choose the tone that reads best over your projector or with your recording setup."))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section(L10n.tr("Colour")) {
                 ColorPalette(
                     selection: $coordinator.settings.color,

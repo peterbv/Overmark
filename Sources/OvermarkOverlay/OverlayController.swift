@@ -23,6 +23,12 @@ public final class OverlayController {
     /// the annotation-scope choice resolved to concrete ids.
     private var allowedDisplayIDs: Set<CGDirectDisplayID>?
 
+    /// The concrete display ids of the annotation scope, or `nil` when the
+    /// scope covers every attached screen. Read by the coordinator when it
+    /// composites screenshots so the board fill only lands on in-scope
+    /// displays.
+    public var scopeDisplayIDs: Set<CGDirectDisplayID>? { allowedDisplayIDs }
+
     /// Whether a build of the overlays is currently running.
     private var isBuilding = false
     /// Whether another overlay build was requested while one was running.
@@ -39,6 +45,14 @@ public final class OverlayController {
     /// is missing it cannot, and the hold-⌥ mode degrades to classic
     /// always-drawing so the app never becomes unusable.
     private var canMonitorOption = true
+
+    /// Whether the dedicated whiteboard is currently covering the panels.
+    public private(set) var isWhiteboardActive = false
+    /// The tone the whiteboard surface is painted with.
+    public var whiteboardStyle: BoardStyle = .white
+    /// Whether the board would currently be shown; pause folds it away so
+    /// the desktop interaction window works normally.
+    private var isBoardVisible = true
 
     /// The handler invoked when a canvas produces an annotation.
     private var onAnnotationCreated: ((Annotation) -> Void)?
@@ -141,6 +155,7 @@ public final class OverlayController {
             canvas.onAnnotationCreated = onAnnotationCreated
             canvas.onClick = onClick
             canvas.onAnnotationEdit = onAnnotationEdit
+            applyWhiteboard(to: canvas)
 
             panel.contentView = canvas
             panel.presentAboveAll()
@@ -206,6 +221,38 @@ public final class OverlayController {
             entry.canvas.isInteractionEnabled = enabled
         }
         refreshMouseTransparency()
+    }
+
+    /// Switches the overlays between the see-through annotation surface and
+    /// the dedicated whiteboard.
+    ///
+    /// The board is an overlay state, not a separate mode: panels, gestures
+    /// and annotations are untouched, the canvases simply paint an opaque
+    /// board behind the marks and claim every click while it is up.
+    public func setWhiteboard(_ active: Bool, style: BoardStyle) {
+        isWhiteboardActive = active
+        whiteboardStyle = style
+        applyWhiteboard()
+        refreshMouseTransparency()
+    }
+
+    /// Folds the board away without turning the whiteboard off (used while
+    /// paused, so the user can reach the desktop normally).
+    public func setBoardVisible(_ visible: Bool) {
+        isBoardVisible = visible
+        applyWhiteboard()
+    }
+
+    /// Pushes the current board state to every canvas (and the given one).
+    private func applyWhiteboard() {
+        for entry in entries.values {
+            applyWhiteboard(to: entry.canvas)
+        }
+    }
+
+    private func applyWhiteboard(to canvas: AnnotationCanvasView) {
+        canvas.isWhiteboard = isWhiteboardActive && isBoardVisible
+        canvas.boardColor = whiteboardStyle.color
     }
 
     /// Routes canvas callbacks to the given handlers.
@@ -291,7 +338,8 @@ public final class OverlayController {
         let panels = entries.values.map {
             "\($0.panel.ignoresMouseEvents ? "ignore" : "accept") drawOpt=\($0.canvas.holdOptionToDraw)"
         }.joined(separator: ", ")
-        return "[OVERLAY] \(mode) panels: [\(panels)]"
+        let board = " board=\(isWhiteboardActive ? whiteboardStyle.rawValue : "off") visible=\(isBoardVisible)"
+        return "[OVERLAY] \(mode)\(board) panels: [\(panels)]"
     }
 
     /// Starts watching the ⌥ modifier for the hold-⌥-to-draw mode.
@@ -371,7 +419,12 @@ public final class OverlayController {
     private func refreshMouseTransparency() {
         for entry in entries.values {
             let accepts: Bool
-            if isOptionToDrawMode {
+            if isWhiteboardActive && isBoardVisible {
+                // The board replaces the screen contents: there is nothing
+                // underneath worth falling through to, so the canvas claims
+                // every click regardless of the ⌥ gate.
+                accepts = entry.canvas.isInteractionEnabled
+            } else if isOptionToDrawMode {
                 accepts = entry.canvas.isInteractionEnabled && isOptionHeld
             } else {
                 accepts = entry.canvas.isInteractionEnabled

@@ -411,6 +411,21 @@ struct AnnotationToolbarView: View {
                 coordinator.settings.holdOptionToDraw.toggle()
             }
 
+            // The dedicated whiteboard: while it is up the screens in scope
+            // show a blank surface instead of the desktop, and every click
+            // draws — same overlay session, no mode switch.
+            EffectButton(
+                systemImage: "rectangle.inset.filled",
+                isSelected: coordinator.isWhiteboardActive,
+                help: L10n.tr(
+                    coordinator.isWhiteboardActive
+                        ? "The whiteboard is up: the screens show a blank board to draw on. Click again to go back to the see-through overlay over your apps."
+                        : "Whiteboard: cover the screens with a blank board to draw on, without an app underneath."
+                )
+            ) {
+                coordinator.toggleWhiteboard()
+            }
+
             AnnotationControlButton(
                 systemImage: coordinator.mode == .paused ? "play.fill" : "pause.fill"
             ) {

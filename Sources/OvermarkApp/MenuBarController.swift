@@ -15,6 +15,7 @@ public final class MenuBarController {
     /// The actions the menu offers, forwarded to the app.
     public var onToggleAnnotation: (() -> Void)?
     public var onTogglePause: (() -> Void)?
+    public var onToggleWhiteboard: (() -> Void)?
     public var onToggleRecording: (() -> Void)?
     public var onSelectPresentationScope: ((PresentationScope) -> Void)?
     public var onUndo: (() -> Void)?
@@ -47,6 +48,8 @@ public final class MenuBarController {
     ///     the menu-bar badge red and offers the stop entry.
     ///   - scope: Which screens the annotation overlay currently covers; the
     ///     annotation-screen entry shows it with a checkmark.
+    ///   - isWhiteboard: Whether the dedicated whiteboard is up; the
+    ///     whiteboard entry shows it with a checkmark.
     ///   - screenNames: The attached screens, for the annotation submenu.
     ///   - canUndo: Whether an undo step is available.
     ///   - canRedo: Whether a redo step is available.
@@ -54,6 +57,7 @@ public final class MenuBarController {
         mode: AppMode,
         isRecording: Bool = false,
         scope: PresentationScope = .all,
+        isWhiteboard: Bool = false,
         screenNames: [String] = [],
         canUndo: Bool,
         canRedo: Bool
@@ -63,6 +67,7 @@ public final class MenuBarController {
             mode: mode,
             isRecording: isRecording,
             scope: scope,
+            isWhiteboard: isWhiteboard,
             screenNames: screenNames,
             canUndo: canUndo,
             canRedo: canRedo
@@ -83,6 +88,7 @@ public final class MenuBarController {
         mode: AppMode = .idle,
         isRecording: Bool = false,
         scope: PresentationScope = .all,
+        isWhiteboard: Bool = false,
         screenNames: [String] = [],
         canUndo: Bool = false,
         canRedo: Bool = false
@@ -141,6 +147,15 @@ public final class MenuBarController {
             }
             scopeItem.submenu = scopeMenu
             menu.addItem(scopeItem)
+
+            let whiteboard = NSMenuItem(
+                title: L10n.tr("Whiteboard"),
+                action: #selector(handleToggleWhiteboard),
+                keyEquivalent: ""
+            )
+            whiteboard.target = self
+            whiteboard.state = isWhiteboard ? .on : .off
+            menu.addItem(whiteboard)
         }
 
         menu.addItem(.separator())
@@ -200,6 +215,10 @@ public final class MenuBarController {
 
     @objc private func handleTogglePause() {
         onTogglePause?()
+    }
+
+    @objc private func handleToggleWhiteboard() {
+        onToggleWhiteboard?()
     }
 
     @objc private func handleToggleRecording() {

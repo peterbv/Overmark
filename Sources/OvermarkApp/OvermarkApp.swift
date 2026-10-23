@@ -129,6 +129,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 500_000_000)
             step("spotlight off")
 
+            coordinator.toggleWhiteboard()
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            step("whiteboard on")
+            FileHandle.standardError.write(Data("\(coordinator.debugOverlayState())\n".utf8))
+            coordinator.whiteboardStyle = .black
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("whiteboard tone switch in place")
+            FileHandle.standardError.write(Data("\(coordinator.debugOverlayState())\n".utf8))
+
+            coordinator.togglePause()
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("pause folds the board")
+            FileHandle.standardError.write(Data("\(coordinator.debugOverlayState())\n".utf8))
+            coordinator.togglePause()
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("resume restores the board")
+
+            coordinator.toggleWhiteboard()
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            step("whiteboard off")
+
             await coordinator.toggleAnnotationMode()
             step("exitAnnotationMode")
             try? await Task.sleep(nanoseconds: 400_000_000)
@@ -168,6 +189,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.onTogglePause = { [weak self] in
             self?.coordinator.togglePause()
         }
+        menuBar.onToggleWhiteboard = { [weak self] in
+            self?.coordinator.toggleWhiteboard()
+        }
         menuBar.onUndo = { [weak self] in
             self?.coordinator.undo()
         }
@@ -201,6 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             mode: coordinator.mode,
             isRecording: coordinator.recordingState.isActive,
             scope: coordinator.presentationScope,
+            isWhiteboard: coordinator.isWhiteboardActive,
             screenNames: coordinator.screenNames,
             canUndo: coordinator.document.canUndo,
             canRedo: coordinator.document.canRedo

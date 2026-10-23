@@ -117,16 +117,22 @@ public enum AnnotationCompositor {
     ///   - image: The captured screenshot of the display.
     ///   - annotations: All annotations, in screen space.
     ///   - screen: The frame of the display the screenshot belongs to.
+    ///   - backdrop: An optional flat colour that replaces the screenshot as
+    ///     the surface the annotations are drawn on — used by the dedicated
+    ///     whiteboard, whose board is not part of any capture (Overmark's own
+    ///     windows are excluded from them) yet is exactly what the audience
+    ///     saw.
     /// - Returns: A new image with the annotations drawn on top.
     public static func composited(
         image: CGImage,
         annotations: [Annotation],
-        screen: ScreenFrame
+        screen: ScreenFrame,
+        backdrop: CGColor? = nil
     ) -> CGImage {
         // Only the annotations that belong to this display are drawn, so a
         // multi-monitor setup does not paint one screen's marks on another.
         let relevant = annotations.filter { screen.frame.contains($0.bounds.center) }
-        guard !relevant.isEmpty else { return image }
+        guard !relevant.isEmpty || backdrop != nil else { return image }
 
         let width = image.width
         let height = image.height
@@ -143,7 +149,14 @@ public enum AnnotationCompositor {
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
         ) else { return image }
 
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        if let backdrop {
+            // The board replaces the screen contents: paint the flat colour
+            // instead of the capture, at device-pixel resolution.
+            context.setFillColor(backdrop)
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        } else {
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
 
         // The screenshot is in device pixels while the annotations are in
         // points, so the scale factor converts between the two.
@@ -185,10 +198,15 @@ public enum AnnotationCompositor {
     ///   - snapshots: One capture per attached display, in any order.
     ///   - annotations: All annotations, in screen space; each one is drawn
     ///     only on the display it belongs to.
+    ///   - boardFill: An optional resolver answering "is the dedicated
+    ///     whiteboard up on this display?" with the board colour, or `nil`
+    ///     when the display shows the plain overlay. The answered colour
+    ///     replaces the capture of that display.
     /// - Returns: The stitched desktop image, or `nil` with no snapshots.
     public static func desktopImage(
         from snapshots: [DisplayPiece],
-        annotations: [Annotation]
+        annotations: [Annotation],
+        boardFill: ((ScreenFrame) -> CGColor?)? = nil
     ) -> CGImage? {
         guard !snapshots.isEmpty else { return nil }
         guard snapshots.count > 1 else {
@@ -196,7 +214,8 @@ public enum AnnotationCompositor {
             return composited(
                 image: snapshot.image,
                 annotations: annotations,
-                screen: snapshot.screen
+                screen: snapshot.screen,
+                backdrop: boardFill?(snapshot.screen)
             )
         }
 
@@ -229,7 +248,8 @@ public enum AnnotationCompositor {
             let annotated = composited(
                 image: snapshot.image,
                 annotations: annotations,
-                screen: snapshot.screen
+                screen: snapshot.screen,
+                backdrop: boardFill?(snapshot.screen)
             )
             let frame = snapshot.screen.frame
             // AppKit points and Core Graphics points both run bottom-up, so

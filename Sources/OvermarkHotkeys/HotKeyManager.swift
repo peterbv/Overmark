@@ -10,6 +10,8 @@ public enum HotKeyAction: String, CaseIterable, Sendable {
     case toggleAnnotation
     /// Pause the overlay so the app underneath can be used.
     case togglePause
+    /// Replace the screen contents with a blank board to draw on.
+    case toggleWhiteboard
     /// Show or hide the spotlight effect.
     case toggleSpotlight
     /// Show or hide the cursor highlight.
@@ -82,6 +84,7 @@ public final class HotKeyManager {
     public static let defaultBindings: [HotKeyAction: Binding] = [
         .toggleAnnotation: Binding(key: .a, modifiers: [.command, .shift]),
         .togglePause: Binding(key: .s, modifiers: [.command, .shift]),
+        .toggleWhiteboard: Binding(key: .b, modifiers: [.command, .shift]),
         .toggleSpotlight: Binding(key: .d, modifiers: [.command, .shift]),
         .toggleHighlight: Binding(key: .f, modifiers: [.command, .shift]),
         .toggleZoom: Binding(key: .g, modifiers: [.command, .shift]),
