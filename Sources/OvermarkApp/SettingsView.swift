@@ -125,13 +125,25 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Toggle(L10n.tr("Draw with ⌥ held"), isOn: $coordinator.settings.holdOptionToDraw)
+                Toggle(L10n.tr("Draw while holding the key"), isOn: $coordinator.settings.holdOptionToDraw)
                     .help(
-                        L10n.tr("On: clicks pass through to the app underneath and only clicks with ⌥ (Option) held draw on the overlay. Off: the overlay captures every click outside the menu bar strip.")
+                        L10n.tr("On: clicks pass through to the app underneath and only clicks with the drawing key held draw on the overlay. Off: the overlay captures every click outside the menu bar strip.")
                     )
+                if coordinator.settings.holdOptionToDraw {
+                    Picker(L10n.tr("Drawing key"), selection: $coordinator.drawingModifier) {
+                        ForEach(DrawingModifier.allCases) { modifier in
+                            Text(modifier.symbol).tag(modifier)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 200)
+                    .help(
+                        L10n.tr("The key you hold to draw on the overlay.")
+                    )
+                }
                 Text(
                     coordinator.settings.holdOptionToDraw
-                        ? L10n.tr("Hold ⌥ (Option) and draw to annotate. Plain clicks go to the app beneath the overlay.")
+                        ? L10n.tr("Hold the drawing key (⌥, ⌃ or ⌘) and draw to annotate. Plain clicks go to the app beneath the overlay.")
                         : L10n.tr("The overlay captures every click. Use the pause button on the toolbar to interact with other apps.")
                 )
                 .font(.footnote)

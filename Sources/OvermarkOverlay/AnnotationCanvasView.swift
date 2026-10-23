@@ -81,13 +81,22 @@ public final class AnnotationCanvasView: NSView {
     /// while the user is annotating. Zero means "exhaust the whole canvas".
     public var menuBarHeight: Double = 0
 
-    /// Whether the canvas captures input only while ⌥ (Option) is held.
+    /// Whether the canvas captures input only while the configured drawing
+    /// key (⌥ by default, ⌃/⌘ selectable) is held.
     ///
     /// On, every plain click is handed straight to the app underneath, so
     /// the user keeps driving the app they are presenting while the overlay
-    /// is up; holding ⌥ is the explicit "draw here" gesture. Off, the canvas
-    /// owns every click outside the menu bar strip and ⌥ is not required.
+    /// is up; holding the drawing key is the explicit "draw here" gesture.
+    /// Off, the canvas owns every click outside the menu bar strip and the
+    /// drawing key is not required.
     public var holdOptionToDraw = false
+
+    /// The modifier flags the user must hold while `holdOptionToDraw` is on.
+    ///
+    /// The monitor tracks the down/up state of the matching physical key at
+    /// the window-server level; this gate re-checks the live event so a stroke
+    /// can only start when the key is genuinely held.
+    public var requiredModifier: NSEvent.ModifierFlags = .option
 
     /// Whether the canvas paints a blank board instead of letting the screen
     /// underneath show through.
@@ -307,7 +316,7 @@ public final class AnnotationCanvasView: NSView {
         if holdOptionToDraw {
             // `NSApp.currentEvent` is the mouse event being routed while the
             // window hit-tests it.
-            guard NSApp.currentEvent?.modifierFlags.contains(.option) == true else {
+            guard NSApp.currentEvent?.modifierFlags.contains(requiredModifier) == true else {
                 return nil
             }
         }

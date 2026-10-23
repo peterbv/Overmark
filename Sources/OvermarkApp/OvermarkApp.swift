@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             let screenReport = """
             [SCREEN] count=\(NSScreen.screens.count) frames=[\(NSScreen.screens.map { NSStringFromRect($0.frame) }.joined(separator: ", "))] \
-            mode=\(coordinator.mode) holdOpt=\(coordinator.settings.holdOptionToDraw)
+            mode=\(coordinator.mode) holdOpt=\(coordinator.settings.holdOptionToDraw) key=\(coordinator.drawingModifier.symbol)
             """
             FileHandle.standardError.write(Data((screenReport + "\n").utf8))
 
@@ -149,6 +149,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             coordinator.toggleWhiteboard()
             try? await Task.sleep(nanoseconds: 300_000_000)
             step("whiteboard off")
+
+            coordinator.drawingModifier = .control
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("drawing key switched to control in place")
+            FileHandle.standardError.write(Data("\(coordinator.debugOverlayState())\n".utf8))
+            coordinator.drawingModifier = .option
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("drawing key back to option")
 
             await coordinator.toggleAnnotationMode()
             step("exitAnnotationMode")

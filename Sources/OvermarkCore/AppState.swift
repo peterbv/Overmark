@@ -122,6 +122,31 @@ public enum BoardStyle: String, Hashable, Sendable, Codable, CaseIterable, Ident
     }
 }
 
+/// The key the user holds to draw while the hold-to-draw gate is on.
+///
+/// The overlay panels stay transparent to the window server unless that key
+/// is down, which is what keeps the rest of the Mac usable during a session.
+/// ⌥ (Option) remains the default — it is the least conflict-prone chord on
+/// a Mac — but ⌃ and ⌘ are selectable in Settings → Tools for keyboards or
+/// habits that reach ⌥ less comfortably.
+public enum DrawingModifier: String, Hashable, Sendable, Codable, CaseIterable, Identifiable {
+    case option
+    case control
+    case command
+
+    public var id: String { rawValue }
+
+    /// The glyph shown in the toolbar chip, the Settings picker and debug
+    /// output.
+    public var symbol: String {
+        switch self {
+        case .option: "⌥"
+        case .control: "⌃"
+        case .command: "⌘"
+        }
+    }
+}
+
 /// The tools and styles the user has selected.
 public struct ToolSettings: Hashable, Sendable, Codable {
     public var tool: AnnotationTool
@@ -131,13 +156,14 @@ public struct ToolSettings: Hashable, Sendable, Codable {
     public var fillsShapes: Bool
     /// The next step number to stamp.
     public var nextStepNumber: Int
-    /// Whether the canvas only captures input while ⌥ (Option) is held.
+    /// Whether the canvas only captures input while the configured drawing
+    /// key (⌥ by default, ⌃/⌘ selectable in Settings) is held.
     ///
     /// With this on, every other click falls through to the app underneath,
     /// which keeps the Mac usable while the overlay is up — the user draws
-    /// by holding ⌥ and drawing, and interacts normally otherwise. With it
-    /// off the canvas owns all clicks outside the menu bar strip (the older
-    /// behaviour).
+    /// by holding the drawing key and drawing, and interacts normally
+    /// otherwise. With it off the canvas owns all clicks outside the menu
+    /// bar strip (the older behaviour).
     public var holdOptionToDraw: Bool
     /// Seconds after which a drawn annotation fades away on its own.
     ///

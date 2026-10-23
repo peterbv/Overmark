@@ -80,7 +80,7 @@ public enum L10n {
         "All screens": "Todas las pantallas",
         "Choose which screens the annotation overlay covers":
             "Elige qué pantallas cubre la capa de anotación",
-        "⌥ draw": "⌥ dibujar",
+        "draw": "dibujar",
         "capture mode": "modo de captura",
         "capture all": "captura todo",
         "Drag here to move the toolbar": "Arrastrá acá para mover la barra",
@@ -100,14 +100,14 @@ public enum L10n {
         "Right-click deletes an annotation": "Clic derecho borra una anotación",
         "The overlay captures every click until Accessibility is granted (System Settings → Privacy & security → Accessibility). Press here to open it.":
             "El overlay captura todos los clics hasta que concedas Accesibilidad (Ajustes del Sistema → Privacidad y seguridad → Accesibilidad). Toca aquí para abrirla.",
-            "The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here to require ⌥ (Option) again.":
-            "La capa captura todos los clics por elección. Usá pausa (⌘⇧S) para interactuar con otras apps, o tocá acá para volver a requerir ⌥ (Opción).",
-        "While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath.":
-            "Con \"⌥ dibujar\" activo, solo los clics con ⌥ (Opción) mantenida dibujan sobre la capa; los demás clics van a la app que está debajo.",
-        "The pencil is latched: every click draws on the overlay. Click again to require ⌥ (Option) again.":
-            "El lápiz está bloqueado: cada clic dibuja sobre la capa. Tocá de nuevo para volver a requerir ⌥ (Opción).",
-        "Latch the pencil: draw with every click instead of holding ⌥ (Option).":
-            "Bloqueá el lápiz: dibujá con cada clic en vez de mantener ⌥ (Opción).",
+            "The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here to require the drawing key again.":
+            "La capa captura todos los clics por elección. Usá pausa (⌘⇧S) para interactuar con otras apps, o tocá acá para volver a requerir la tecla de dibujo.",
+        "While this chip is up, only clicks with the drawing key (⌥, ⌃ or ⌘) held draw on the overlay; every other click reaches the app underneath.":
+            "Con el chip activo, solo los clics con la tecla de dibujo (⌥, ⌃ o ⌘) mantenida dibujan sobre la capa; los demás clics van a la app que está debajo.",
+        "The pencil is latched: every click draws on the overlay. Click again to require the drawing key again.":
+            "El lápiz está bloqueado: cada clic dibuja sobre la capa. Tocá de nuevo para volver a requerir la tecla de dibujo.",
+        "Latch the pencil: draw with every click instead of holding the drawing key.":
+            "Bloqueá el lápiz: dibujá con cada clic en vez de mantener la tecla de dibujo.",
 
         // Settings — tabs and tools.
         "General": "General",
@@ -161,7 +161,9 @@ public enum L10n {
         "End colour": "Color final",
         "Strokes blend from the starting colour into the end colour along the line.": "El trazo funde el color inicial con el final a lo largo de la línea.",
         "Add colour…": "Agregar color…",
-        "Draw with ⌥ held": "Dibujar manteniendo ⌥",
+        "Draw while holding the key": "Dibujar manteniendo una tecla",
+        "Drawing key": "Tecla de dibujo",
+        "The key you hold to draw on the overlay.": "La tecla que mantenés para dibujar sobre la capa.",
         "Colour": "Color",
         "Effects": "Efectos",
         "Pointer highlight": "Resaltar puntero",
@@ -188,10 +190,10 @@ public enum L10n {
         "Grant": "Conceder",
         "Open System Settings": "Abrir Ajustes del Sistema",
 
-        "On: clicks pass through to the app underneath and only clicks with ⌥ (Option) held draw on the overlay. Off: the overlay captures every click outside the menu bar strip.":
-            "Activado: los clics atraviesan hasta la app de abajo y solo los clics con ⌥ (Opción) dibujan sobre la capa. Desactivado: la capa captura todos los clics fuera de la franja de la barra de menús.",
-        "Hold ⌥ (Option) and draw to annotate. Plain clicks go to the app beneath the overlay.":
-            "Mantén ⌥ (Opción) y dibuja para anotar. Los clics normales van a la app que está debajo de la capa.",
+        "On: clicks pass through to the app underneath and only clicks with the drawing key held draw on the overlay. Off: the overlay captures every click outside the menu bar strip.":
+            "Activado: los clics atraviesan hasta la app de abajo y solo los clics con la tecla de dibujo dibujan sobre la capa. Desactivado: la capa captura todos los clics fuera de la franja de la barra de menús.",
+        "Hold the drawing key (⌥, ⌃ or ⌘) and draw to annotate. Plain clicks go to the app beneath the overlay.":
+            "Mantené la tecla de dibujo (⌥, ⌃ o ⌘) y dibujá para anotar. Los clics normales van a la app que está debajo de la capa.",
         "The overlay captures every click. Use the pause button on the toolbar to interact with other apps.":
             "La capa captura todos los clics. Usa el botón de pausa de la barra para interactuar con otras apps.",
         "Changes apply immediately to the menus, the toolbar and every window.":

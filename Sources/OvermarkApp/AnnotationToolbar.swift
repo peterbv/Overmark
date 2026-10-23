@@ -396,16 +396,16 @@ struct AnnotationToolbarView: View {
             )
 
             // The pencil latch: one click flips between drawing with every
-            // click (no modifier) and the hold-⌥-to-draw mode that the chips
-            // in the style row describe. Same ToolSettings flag the Settings
-            // pane toggles, so the overlay re-applies it live.
+            // click and the hold-key-to-draw mode that the chips in the
+            // style row describe. Same ToolSettings flag the Settings pane
+            // toggles, so the overlay re-applies it live.
             EffectButton(
                 systemImage: "pencil.tip",
                 isSelected: !coordinator.settings.holdOptionToDraw,
                 help: L10n.tr(
                     !coordinator.settings.holdOptionToDraw
-                        ? "The pencil is latched: every click draws on the overlay. Click again to require ⌥ (Option) again."
-                        : "Latch the pencil: draw with every click instead of holding ⌥ (Option)."
+                        ? "The pencil is latched: every click draws on the overlay. Click again to require the drawing key again."
+                        : "Latch the pencil: draw with every click instead of holding the drawing key."
                 )
             ) {
                 coordinator.settings.holdOptionToDraw.toggle()
@@ -472,14 +472,14 @@ struct AnnotationToolbarView: View {
 
             if coordinator.settings.holdOptionToDraw {
                 if coordinator.overlayPassthroughActive {
-                    Text(L10n.tr("⌥ draw"))
+                    Text("\(coordinator.drawingModifier.symbol) \(L10n.tr("draw"))")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.65))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(Color.white.opacity(0.10)))
                         .help(
-                            L10n.tr("While this says \"⌥ draw\", only clicks with ⌥ (Option) held draw on the overlay; every other click reaches the app underneath.")
+                            L10n.tr("While this chip is up, only clicks with the drawing key (⌥, ⌃ or ⌘) held draw on the overlay; every other click reaches the app underneath.")
                         )
                 } else {
                     Text(L10n.tr("capture mode"))
@@ -508,7 +508,7 @@ struct AnnotationToolbarView: View {
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.blue.opacity(0.22)))
                     .help(
-                        L10n.tr("The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here to require ⌥ (Option) again.")
+                        L10n.tr("The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here to require the drawing key again.")
                     )
                     .onTapGesture {
                         // The pencil latch button toggles the same flag; this

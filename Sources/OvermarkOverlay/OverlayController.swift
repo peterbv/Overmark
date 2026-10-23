@@ -34,17 +34,20 @@ public final class OverlayController {
     /// Whether another overlay build was requested while one was running.
     private var pendingBuild = false
 
-    /// Watches the ⌥ key while the overlays are on screen so the panels can
-    /// toggle window-level pass-through (see `refreshMouseTransparency`).
-    private var optionMonitor: OptionKeyMonitor?
-    /// Whether the ⌥ modifier is currently held system-wide.
-    private var isOptionHeld = false
-    /// Whether the canvases run in "hold ⌥ to draw" mode.
-    private var isOptionToDrawMode = false
-    /// Whether the ⌥ tap could be created. When the Accessibility permission
-    /// is missing it cannot, and the hold-⌥ mode degrades to classic
-    /// always-drawing so the app never becomes unusable.
+    /// Watches the drawing key (⌥ by default, ⌃/⌘ selectable) while the
+    /// overlays are on screen so the panels can toggle window-level
+    /// pass-through (see `refreshMouseTransparency`).
+    private var modifierMonitor: ModifierKeyMonitor?
+    /// Whether the drawing key is currently held system-wide.
+    private var isModifierHeld = false
+    /// Whether the canvases run in "hold the drawing key to draw" mode.
+    private var isHoldKeyMode = false
+    /// Whether the gate key could be observed. When the Accessibility
+    /// permission is missing it cannot, and the hold-to-draw mode degrades to
+    /// classic always-drawing so the app never becomes unusable.
     private var canMonitorOption = true
+    /// The modifier the canvases require while the hold gate is on.
+    public private(set) var drawingModifier: DrawingModifier = .option
 
     /// Whether the dedicated whiteboard is currently covering the panels.
     public private(set) var isWhiteboardActive = false
@@ -149,6 +152,9 @@ public final class OverlayController {
             canvas.tool = .pen
             canvas.autoresizingMask = [.width, .height]
             canvas.wantsLayer = true
+            // Fresh canvases must not fall back to the ⌥ default when the
+            // user picked ⌃ or ⌘ as the drawing key.
+            canvas.requiredModifier = drawingModifier.nsFlags
 
             // Re-apply the stored callbacks so annotations created on a
             // freshly shown overlay still reach the app.
@@ -194,11 +200,11 @@ public final class OverlayController {
         // missing and the permission returns while the overlay is up, this is
         // where the mode recovers (a settings change or a permission refresh
         // reaches here).
-        if optionMonitor == nil && settings.holdOptionToDraw {
+        if modifierMonitor == nil && settings.holdOptionToDraw {
             startOptionMonitoring()
         }
 
-        isOptionToDrawMode = settings.holdOptionToDraw && canMonitorOption
+        isHoldKeyMode = settings.holdOptionToDraw && canMonitorOption
 
         for entry in entries.values {
             // The palette only ever offers tools the renderer can draw, but
@@ -210,7 +216,26 @@ public final class OverlayController {
             entry.canvas.fillsShapes = settings.fillsShapes
             entry.canvas.gradientColor = settings.gradientColor
             entry.canvas.nextStepNumber = settings.nextStepNumber
-            entry.canvas.holdOptionToDraw = isOptionToDrawMode
+            entry.canvas.holdOptionToDraw = isHoldKeyMode
+            entry.canvas.requiredModifier = drawingModifier.nsFlags
+        }
+        refreshMouseTransparency()
+    }
+
+    /// Switches the drawing key the canvases require while the hold gate is
+    /// on without rebuilding the overlay windows.
+    ///
+    /// Retargets the system-wide monitor (a `flagsChanged` tap observes every
+    /// modifier, only the tracked flag bit changes), re-stamps every canvas
+    /// and refreshes the door to passthrough. If the previously tracked key
+    /// was still down, the monitor reports it as released, so a stroke can
+    /// never linger past the switch.
+    public func setDrawingModifier(_ modifier: DrawingModifier) {
+        guard modifier != drawingModifier else { return }
+        drawingModifier = modifier
+        modifierMonitor?.setMask(modifier.cgMask)
+        for entry in entries.values {
+            entry.canvas.requiredModifier = modifier.nsFlags
         }
         refreshMouseTransparency()
     }
@@ -329,12 +354,12 @@ public final class OverlayController {
     /// The toolbar reflects this in its chip; the degraded case means the ⌥
     /// key could not be observed, so the panels capture clicks everywhere.
     public var isPassthroughMode: Bool {
-        isOptionToDrawMode && canMonitorOption
+        isHoldKeyMode && canMonitorOption
     }
 
     /// Compactly logs the server-side click routing state of every panel.
     public func debugPanelState() -> String {
-        let mode = "optionToDraw=\(isOptionToDrawMode) canMonitor=\(canMonitorOption) held=\(isOptionHeld) count=\(entries.count)"
+        let mode = "gate=\(drawingModifier.symbol) holdKey=\(isHoldKeyMode) canMonitor=\(canMonitorOption) held=\(isModifierHeld) count=\(entries.count)"
         let panels = entries.values.map {
             "\($0.panel.ignoresMouseEvents ? "ignore" : "accept") drawOpt=\($0.canvas.holdOptionToDraw)"
         }.joined(separator: ", ")
@@ -342,7 +367,7 @@ public final class OverlayController {
         return "[OVERLAY] \(mode)\(board) panels: [\(panels)]"
     }
 
-    /// Starts watching the ⌥ modifier for the hold-⌥-to-draw mode.
+    /// Starts watching the drawing key for the hold-to-draw mode.
     ///
     /// `hitTest`-level filtering cannot forward a click to another app: by
     /// the time the view stack runs, the window server has already decided
@@ -351,33 +376,33 @@ public final class OverlayController {
     /// transparency — based on the live key state, which keeps every other
     /// app clickable while the overlay is on screen.
     private func startOptionMonitoring() {
-        if optionMonitor == nil {
-            let monitor = OptionKeyMonitor { [weak self] held in
+        if modifierMonitor == nil {
+            let monitor = ModifierKeyMonitor(mask: drawingModifier.cgMask) { [weak self] held in
                 self?.handleOptionStateChanged(held)
             }
             guard monitor.start() else {
-                // Without the Accessibility permission the ⌥ key cannot be
-                // observed; degrade to the classic always-draws mode so the
+                // Without the Accessibility permission the drawing key cannot
+                // be observed; degrade to the classic always-draws mode so the
                 // app stays usable (Pause provides desktop interaction).
                 canMonitorOption = false
-                isOptionToDrawMode = false
+                isHoldKeyMode = false
                 for entry in entries.values {
                     entry.canvas.holdOptionToDraw = false
                 }
                 return
             }
-            optionMonitor = monitor
+            modifierMonitor = monitor
             canMonitorOption = true
         }
     }
 
     private func handleOptionStateChanged(_ held: Bool) {
-        isOptionHeld = held
+        isModifierHeld = held
         if !held {
-            // The panels stop accepting events exactly when ⌥ is released,
-            // so a stroke in flight can never see its own `mouseUp`; discard
-            // the half-drawn annotation instead of leaving it stuck on
-            // screen.
+            // The panels stop accepting events exactly when the drawing key
+            // is released, so a stroke in flight can never see its own
+            // `mouseUp`; discard the half-drawn annotation instead of leaving
+            // it stuck on screen.
             for entry in entries.values {
                 entry.canvas.cancelPendingStroke()
             }
@@ -385,51 +410,73 @@ public final class OverlayController {
         refreshMouseTransparency()
     }
 
-    /// Re-attempts the ⌥ tap after Accessibility came back.
+    /// Re-attempts the gate tap after Accessibility came back.
     ///
     /// Called by the coordinator when the permission state refreshes while
     /// the overlay windows are already up, so the pass-through recovers in
     /// place instead of waiting for the next rebuild.
     public func retryOptionMonitoring(_ settingWantsOption: Bool) {
         guard !entries.isEmpty else { return }
-        if optionMonitor == nil {
+        if modifierMonitor == nil {
             // Installs when the tap can now be created; degrades again (with
             // the canvases set to capture mode) if it still cannot.
             startOptionMonitoring()
         }
-        isOptionToDrawMode = settingWantsOption && canMonitorOption
+        isHoldKeyMode = settingWantsOption && canMonitorOption
         for entry in entries.values {
-            entry.canvas.holdOptionToDraw = isOptionToDrawMode
+            entry.canvas.holdOptionToDraw = isHoldKeyMode
+            entry.canvas.requiredModifier = drawingModifier.nsFlags
         }
         refreshMouseTransparency()
     }
 
     private func stopOptionMonitoring() {
-        optionMonitor?.stop()
-        optionMonitor = nil
-        isOptionHeld = false
+        modifierMonitor?.stop()
+        modifierMonitor = nil
+        isModifierHeld = false
     }
 
     /// Syncs `ignoresMouseEvents` on every panel with the current mode.
     ///
     /// This is the switch the window server honours: with the flag on, clicks
     /// reach the Dock, the menu bar and the apps underneath; with it off —
-    /// only while ⌥ is held in hold-⌥-to-draw mode — the panels receive the
-    /// drawing gestures.
+    /// only while the drawing key is held in hold-to-draw mode — the panels
+    /// receive the drawing gestures.
     private func refreshMouseTransparency() {
         for entry in entries.values {
             let accepts: Bool
             if isWhiteboardActive && isBoardVisible {
                 // The board replaces the screen contents: there is nothing
                 // underneath worth falling through to, so the canvas claims
-                // every click regardless of the ⌥ gate.
+                // every click regardless of the drawing-key gate.
                 accepts = entry.canvas.isInteractionEnabled
-            } else if isOptionToDrawMode {
-                accepts = entry.canvas.isInteractionEnabled && isOptionHeld
+            } else if isHoldKeyMode {
+                accepts = entry.canvas.isInteractionEnabled && isModifierHeld
             } else {
                 accepts = entry.canvas.isInteractionEnabled
             }
             entry.panel.ignoresMouseEvents = !accepts
+        }
+    }
+}
+
+extension DrawingModifier {
+    /// The flags tested in `NSApp.currentEvent` while the overlay hit-tests
+    /// a mouse event.
+    var nsFlags: NSEvent.ModifierFlags {
+        switch self {
+        case .option: .option
+        case .control: .control
+        case .command: .command
+        }
+    }
+
+    /// The flag bit tracked by the system-wide `flagsChanged` tap.
+    var cgMask: CGEventFlags {
+        switch self {
+        case .option: .maskAlternate
+        case .control: .maskControl
+        case .command: .maskCommand
         }
     }
 }

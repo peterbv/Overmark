@@ -69,6 +69,15 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
+    /// The key the user holds to draw while the hold-to-draw gate is on
+    /// (⌥ by default, ⌃/⌘ selectable); persists between launches.
+    public var drawingModifier: DrawingModifier = .option {
+        didSet {
+            PreferencesStore.save(drawingModifier)
+            overlay.setDrawingModifier(drawingModifier)
+        }
+    }
+
     /// Debounced autosave; cancelled and rescheduled as the document churns.
     private var autosaveTask: Task<Void, Never>?
 
@@ -239,6 +248,7 @@ public final class AppCoordinator: ObservableObject {
         favoriteColors = PreferencesStore.loadFavoriteColors()
         cursorEffects = PreferencesStore.loadCursorEffects()
         whiteboardStyle = PreferencesStore.loadWhiteboardStyle()
+        drawingModifier = PreferencesStore.loadDrawingModifier()
 
         hotKeys.onAction = { [weak self] action in
             self?.handle(action)
@@ -752,6 +762,9 @@ public final class AppCoordinator: ObservableObject {
 
         overlay.setAnnotations(document.annotations)
         overlay.apply(settings: settings)
+        // didSet observers do not fire during init, so a saved ⌃/⌘ choice
+        // has to be pushed on the first overlay build of the launch.
+        overlay.setDrawingModifier(drawingModifier)
         mode = .annotating
 
         // The control bar is what makes annotation mode self-serve: no
