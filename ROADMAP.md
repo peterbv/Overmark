@@ -32,7 +32,10 @@
 - Congelar pantalla como estado del overlay (still de las pantallas del
   scope detrás de las anotaciones, ☑ en menú y barra, ⌘⇧P); excluyente
   con la pizarra, pausa pliega el still y las capturas lo componen.
-- 148 tests (22 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
+- Selección de anotaciones (botón en la barra): marquee por intersección,
+  arrastrar mueve con clamp a la pantalla, la paleta recolorea, la basura
+  borra lo seleccionado; un solo undo por gesto.
+- 154 tests (22 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
 
 ## 1. Funciones nuevas (mayor valor)
 
@@ -44,6 +47,7 @@
 | 4 | **Grabación con efectos de cursor incrustados** | Media | **Hecho** | Los efectos (anillo, spotlight, lupa, ripples, láser) se queman por frame en la grabación de ventana con la misma matriz de anotaciones; la lupa muestra contenido limpio de la ventana, sin anotaciones. La grabación de pantalla ya los mostraba (sus ventanas están en la cinta). |
 | 11 | **Puntero láser** | Alta | **Hecho** | Migrado del banco de ideas. Punto brillante + rastro que se apaga en ~0,7 s; toggle `cursorarrow.rays` en la barra y en Settings → Cursor (color y tamaño 2–14 pt). Quemado en la grabación de ventana por el mismo camino que el resto de los efectos. Codificación resiliente: el decode de `CursorEffects` ya no descarta el blob viejo cuando aparecen campos nuevos. |
 | 12 | **Congelar pantalla** | Media | **Hecho** | Migrado del banco de ideas. Estado del overlay (hermano de la pizarra): captura una vez cada pantalla del scope (sin ventanas propias) y las canvases pintan ese still detrás de las anotaciones — el fondo queda quieto mientras las apps de abajo siguen corriendo. Botón `snowflake` en la barra, ☑ en menú, ⌘⇧P. Excluyente con la pizarra en ambos sentidos; pausa pliega el still; capturas componen el frame congelado; salir de la sesión lo suelta. |
+| 13 | **Mover y recolorear anotaciones (marquee)** | Media | **Hecho** | Migrado del banco de ideas. Botón de selección en la barra: marquee por intersección de límites; arrastrar una selección la mueve con clamp a la pantalla; la paleta recolorea la selección (color sólido, limpia gradiente); la basura borra lo seleccionado (si no hay selección limpia todo). Un solo undo por gesto (batch `update`/`remove(id:)`). Pasa a dibujar (elegir herramienta) limpia la selección. |
 
 ## 2. Mejoras rápidas (una sesión cada una)
 
@@ -63,9 +67,6 @@
 
 ## 4. Banco de ideas (sin compromiso, a evaluar)
 
-- **Mover/recolorear anotaciones existentes**: selección por marquee para
-  arrastrar, cambiar color o borrar lo ya dibujado (hoy: borrar clic
-  derecho y undo).
 - **Exportar**: PNG/PDF de la sesión actual; GIF corto del overlay animado.
 - **Sellos/símbolos**: stamps de check, ✗, flechas curvas, emojis.
 - **Temporizador en pantalla**: cuenta regresiva visible durante presentaciones.
@@ -77,6 +78,19 @@
 - **Multiventana de grabación**: grabar dos ventanas en paralelo.
 
 ## Registro de decisiones
+
+- **23 oct 2026** — **#13 hecho: mover y recolorear anotaciones (marquee).**
+  Estado de sesión del overlay (mismo patrón que pizarra/freeze): el botón
+  de selecciónSGlobal en la barra activa `isSelectionMode` y el canvas rutea
+  los gestos por su cuenta (marquee por intersección de límites, arrastre
+  de selección con clamp para no salir de la pantalla, sin dibujar). El
+  recolor sale barato: la paleta ya persiste en settings, así que el
+  `didSet` aplica `with(color:)` a la selección (color sólido — el
+  gradiente se limpia). Borrar es la basura existente que decide entre
+  limpiar todo y borrar lo seleccionado. Undo es un solo paso por gesto:
+  batch mutators nuevos en `AnnotationDocument`
+  (`update(_ recordHistory:)` y `remove(id:recordHistory:)`). Sin modos
+  `AppMode`, sin columna de menú ni hotkey (queda sugerido para después).
 
 - **23 oct 2026** — **Fix: la barra anclada ya no se fuga del escritorio**
   (`2c050fc`). El colapso pegaba la pestaña a los bordes de la barra, pero

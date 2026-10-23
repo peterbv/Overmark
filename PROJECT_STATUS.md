@@ -167,6 +167,17 @@ presentaciones, sin congelar el escritorio.
   con precedencia sobre el relleno): copiar y guardar muestran el still
   tal como lo vio el público, con las anotaciones encima.
 
+### Mover y recolorear anotaciones (marquee)
+- Botón de selección en la barra (estado del overlay, sesiones activas):
+  marquee por intersección de límites; arrastrar una selección la mueve
+  con clamp para que nunca salga de la pantalla; la paleta recolorea lo
+  seleccionado (color sólido, limpia el gradiente); la basura borra lo
+  seleccionado — cuando no hay selección limpia todo, como siempre.
+- Un gesto = un undo (mutadores batch en `AnnotationDocument`):
+  `update(_:recordHistory:)` y `remove(ids:recordHistory:)`.
+- Elegir una herramienta de dibujo o apagar el modo limpia la selección;
+  también se poda sola si el documento cambia debajo.
+
 ### Extras
 - **Español por defecto**, inglés y automático; cammbio en Preferencias → General → Idioma
   (se persiste). Toda la UI traducida (menú, barra, ajustes, onboarding, editor, errores).
@@ -319,7 +330,16 @@ presentaciones, sin congelar el escritorio.
     (el still reemplaza la captura, gana sobre el relleno, no-op sin
     frozen).
 
-`swift build` limpio · `swift test` verde: **148** pruebas Swift Testing (22 suites) +
+27. Mover y recolorear anotaciones (marquee, migrado del banco): modo de
+    selección como estado del overlay — gesto de marquee por intersección,
+    arrastre con clamp, recolor desde la paleta existente
+    (`with(color:)`, limpia gradiente), basura que decide entre borrar
+    selección o limpiar todo. 6 tests sumados (transform de solidez
+    geometría, batch `update`/`remove` que graban UN undo por gesto). El
+    undo del gesto completo es un solo paso; sin "shift-click", sin menú
+    ni hotkey esta ronda.
+
+`swift build` limpio · `swift test` verde: **154** pruebas Swift Testing (22 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
