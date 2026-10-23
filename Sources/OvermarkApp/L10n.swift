@@ -318,5 +318,14 @@ public enum L10n {
             "Congelar la pantalla: dibujá sobre una imagen quieta del escritorio mientras las apps de abajo siguen corriendo.",
         "The screen is frozen: the displays show a still frame. Click again to go back to the live desktop under the overlay.":
             "La pantalla está congelada: las pantallas muestran una imagen quieta. Tocá de nuevo para volver al escritorio vivo debajo de la capa.",
+
+        // Selection mode.
+        "Move annotations": "Mover anotaciones",
+        "Clear the canvas": "Limpiar el lienzo",
+        "Move annotations: drag a marquee to select, drag a selection to move it, use the palette to recolor it, and the trash to delete it.":
+            "Mover anotaciones: arrastrá un rectángulo para seleccionar, arrastrá una selección para moverla, usá la paleta para cambiarle el color y el tacho para borrarla.",
+        "Move annotations is on: gestures move instead of drawing. Click the button again to draw.":
+            "Mover anotaciones está activo: los gestos mueven en vez de dibujar. Tocá el botón de nuevo para dibujar.",
+        "Delete the selected annotations.": "Borrar las anotaciones seleccionadas.",
     ]
 }

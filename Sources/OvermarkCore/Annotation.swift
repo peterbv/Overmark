@@ -177,6 +177,42 @@ public struct Annotation: Identifiable, Hashable, Sendable, Codable {
     }
 }
 
+// MARK: - User-driven transforms
+
+public extension Annotation {
+    /// A copy of the annotation shifted by the given vector.
+    ///
+    /// Selection gestures (dragging a selection around) build these copies:
+    /// the identity travels with the annotation — same `id`, same look — and
+    /// only the geometry moves: the path points and the bounding box, in
+    /// screen space. The bounds travel with the path, so hit-testing and the
+    /// screenshot compositor keep seeing the mark where it now is.
+    func moved(by vector: Vector) -> Annotation {
+        var copy = self
+        copy.path = path.map { point in
+            Point(x: point.x + vector.dx, y: point.y + vector.dy)
+        }
+        copy.bounds = Rect(
+            origin: Point(x: bounds.origin.x + vector.dx, y: bounds.origin.y + vector.dy),
+            size: bounds.size
+        )
+        return copy
+    }
+
+    /// A copy of the annotation painted with the given colour.
+    ///
+    /// Recolouring a selection reuses the palette the user picks strokes
+    /// from. A gradient stroke solidifies into the new colour: keeping the
+    /// old gradient end would leave a two-tone mark after a "change the
+    /// colour" action.
+    func with(color newColor: Color) -> Annotation {
+        var copy = self
+        copy.color = newColor
+        copy.gradientColor = nil
+        return copy
+    }
+}
+
 // MARK: - Hit testing
 
 public extension Annotation {

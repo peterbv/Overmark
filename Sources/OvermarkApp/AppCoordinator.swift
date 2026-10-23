@@ -38,6 +38,13 @@ public final class AppCoordinator: ObservableObject {
             recordingAnnotations.set(document.annotations)
             syncStepNumber()
             scheduleAutosave()
+            // The selection cannot outlive its annotations: a delete, a
+            // fade or a restore that lost ids prunes the selection itself,
+            // so the chrome never highlights ghosts.
+            let existing = Set(document.annotations.map(\.id))
+            if !selectionIDs.isSubset(of: existing) {
+                selectionIDs = selectionIDs.intersection(existing)
+            }
         }
     }
 
@@ -88,6 +95,26 @@ public final class AppCoordinator: ObservableObject {
     /// touching the live screen.
     private var freezeImages: [CGDirectDisplayID: CGImage] = [:]
 
+    /// Whether clicks are routed to marquee selection instead of drawing.
+    ///
+    /// Like the board and the freeze, selection is an overlay session state:
+    /// gestures highlight or move what is already drawn instead of creating
+    /// new marks. Turning the mode off clears the selection.
+    @Published public var isSelectionMode = false {
+        didSet {
+            guard isSelectionMode != oldValue else { return }
+            overlay.setSelectionMode(isSelectionMode)
+            if !isSelectionMode {
+                selectionIDs = []
+            }
+        }
+    }
+
+    /// The annotation ids highlighted by the selection gesture.
+    @Published public private(set) var selectionIDs: Set<Annotation.ID> = [] {
+        didSet { overlay.setSelection(selectionIDs) }
+    }
+
     /// The key the user holds to draw while the hold-to-draw gate is on
     /// (⌥ by default, ⌃/⌘ selectable); persists between launches.
     public var drawingModifier: DrawingModifier = .option {
@@ -106,6 +133,16 @@ public final class AppCoordinator: ObservableObject {
     /// to user defaults on every change.
     @Published public var settings = ToolSettings() {
         didSet {
+            // Recolor offsets the selection while the mode is on: every
+            // selected annotation picks the newly chosen colour (and stops
+            // any gradient it had), as one undo step per palette pick.
+            if isSelectionMode, !selectionIDs.isEmpty, oldValue.color != settings.color {
+                applyAnnotationEdits(
+                    document.annotations
+                        .filter { selectionIDs.contains($0.id) }
+                        .map { $0.with(color: settings.color) }
+                )
+            }
             overlay.apply(settings: settings)
             PreferencesStore.save(settings)
         }
@@ -318,6 +355,12 @@ public final class AppCoordinator: ObservableObject {
             onAnnotationEdit: { [weak self] annotation in
                 let anchor = annotation.path.first ?? annotation.bounds.origin
                 self?.presentTextEditor(at: anchor, editing: annotation)
+            },
+            onSelectionCommitted: { [weak self] ids in
+                self?.selectionIDs = ids
+            },
+            onSelectionMoved: { [weak self] edits in
+                self?.applyAnnotationEdits(edits)
             }
         )
 
@@ -591,6 +634,9 @@ public final class AppCoordinator: ObservableObject {
         // desktop, not over yesterday's still.
         freezeImages = [:]
         isFreezeActive = false
+        // And the selection: a next session draws first and selects only
+        // from a blank slate.
+        isSelectionMode = false
         // ESC is the guaranteed exit, and that promise extends to the
         // recording: ending a session never loses the file — it is
         // finalized here and announced when done.
@@ -641,6 +687,33 @@ public final class AppCoordinator: ObservableObject {
             freezeImages = [:]
             isFreezeActive = false
         }
+    }
+
+    /// Toggles the marquee-selection mode.
+    ///
+    /// Selection is a state of the running session, like the board and the
+    /// freeze: while it is on, gestures highlight or move what is already
+    /// drawn instead of creating new marks.
+    public func toggleSelectionMode() {
+        guard mode != .idle else { return }
+        isSelectionMode.toggle()
+    }
+
+    /// Applies edits (moves, recolors) to specific annotations as one undo
+    /// step.
+    public func applyAnnotationEdits(_ edits: [Annotation]) {
+        guard !edits.isEmpty else { return }
+        document.update(edits)
+    }
+
+    /// Deletes every annotation in the selection.
+    ///
+    /// The document records the batch removal once, so a single undo
+    /// restores the whole group.
+    public func deleteSelection() {
+        guard !selectionIDs.isEmpty else { return }
+        document.remove(ids: selectionIDs)
+        selectionIDs = []
     }
 
     /// Switches the session between the live overlay and a frozen frame of

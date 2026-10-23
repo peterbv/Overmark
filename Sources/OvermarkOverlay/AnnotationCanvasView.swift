@@ -25,12 +25,24 @@ public final class AnnotationCanvasView: NSView {
     /// Called when the user right-clicks an existing annotation asking to
     /// delete it.
     public var onAnnotationDelete: ((Annotation) -> Void)?
+    /// Called when a selection gesture finishes, with the ids now selected
+    /// (an empty set means the gesture cleared the selection).
+    public var onSelectionCommitted: ((Set<Annotation.ID>) -> Void)?
+    /// Called when a selection drag ends, carrying the moved annotation
+    /// copies for the app layer to commit as one batch.
+    public var onSelectionMoved: (([Annotation]) -> Void)?
 
     // MARK: - State
 
     /// The annotations to render.
     public var annotations: [Annotation] = [] {
-        didSet { needsDisplay = true }
+        didSet {
+            needsDisplay = true
+            // Fresh values (the app layer pushed the committed batch) make
+            // the in-flight previews stale; the real annotations now carry
+            // the move.
+            if !movePreview.isEmpty { movePreview = [:] }
+        }
     }
 
     /// The in-progress annotation, rendered on top of the committed ones.
@@ -128,6 +140,46 @@ public final class AnnotationCanvasView: NSView {
         didSet { needsDisplay = true }
     }
 
+    // MARK: - Selection
+
+    /// Whether gestures route to the selection machinery instead of drawing.
+    ///
+    /// Like the whiteboard and the freeze, selection is a state of the
+    /// running session: gestures still pass the same `hitTest` gates (the
+    /// drawing key, pause, the menu-bar strip); only what a gesture *means*
+    /// changes — dragging draws a marquee or moves a selection instead of
+    /// laying down ink.
+    public var isSelectionMode = false {
+        didSet {
+            needsDisplay = true
+            resetSelectionGesture()
+        }
+    }
+
+    /// The marks currently highlighted as selected.
+    public var selectedIDs: Set<Annotation.ID> = [] {
+        didSet { needsDisplay = true }
+    }
+
+    /// One selection gesture in progress.
+    private enum SelectionGesture: Equatable {
+        /// Empty canvas: dragging stretches a marquee rectangle.
+        case marquee(start: Point)
+        /// A mark (or the selection): dragging moves its originals.
+        case move(start: Point, originals: [Annotation])
+        case none
+    }
+
+    private var selectionGesture: SelectionGesture = .none
+    /// The marquee rectangle, in screen space, while it stretches.
+    private var marqueeRect: Rect?
+    /// The translation currently applied to the moving group, clamped so it
+    /// cannot leave the screen.
+    private var moveDelta: Vector = .zero
+    /// Moved copies shown while the drag is in flight; the committed values
+    /// arrive through `annotations` once the app layer records the batch.
+    private var movePreview: [Annotation.ID: Annotation] = [:]
+
     // MARK: - Tracking
 
     private var dragPoints: [Point] = []
@@ -177,11 +229,69 @@ public final class AnnotationCanvasView: NSView {
         let renderer = AnnotationRenderer(style: .init(scale: 1))
 
         var toDraw = annotations
+        // While a move drags, the previewed copies stand in for their
+        // originals; the committed values arrive via `annotations` right
+        // after the gesture and the mapping empties.
+        if !movePreview.isEmpty {
+            toDraw = annotations.map { movePreview[$0.id] ?? $0 }
+        }
         if let inProgress {
             toDraw.append(inProgress)
         }
 
         renderer.draw(annotations: toDraw, in: context, origin: screen.origin)
+
+        drawSelectionChrome(context: context)
+    }
+
+    /// Paints the selection chrome: dashed outlines around selected marks
+    /// and the dashed marquee while it stretches.
+    ///
+    /// The chrome floats above the ink on purpose — it is an interaction
+    /// affordance, not a mark — and it follows a move preview so the
+    /// outlines travel with the dragged copies.
+    private func drawSelectionChrome(context: CGContext) {
+        guard isSelectionMode else { return }
+
+        let chrome = CGColor(srgbRed: 0.15, green: 0.55, blue: 1, alpha: 1)
+
+        for annotation in annotations {
+            guard selectedIDs.contains(annotation.id) else { continue }
+            let shown = movePreview[annotation.id] ?? annotation
+            // Marks that live on another display highlight on their own
+            // canvas only, exactly like the panel they render on.
+            guard shown.bounds.intersects(screen.frame) else { continue }
+            let rect = CGRect(
+                x: shown.bounds.minX - screen.origin.x,
+                y: shown.bounds.minY - screen.origin.y,
+                width: shown.bounds.size.width,
+                height: shown.bounds.size.height
+            )
+
+            context.saveGState()
+            context.setStrokeColor(chrome)
+            context.setLineWidth(2)
+            context.setLineDash(phase: 0, lengths: [6, 4])
+            context.stroke(rect.insetBy(dx: -3, dy: -3))
+            context.restoreGState()
+        }
+
+        if let marqueeRect {
+            let rect = CGRect(
+                x: marqueeRect.minX - screen.origin.x,
+                y: marqueeRect.minY - screen.origin.y,
+                width: marqueeRect.size.width,
+                height: marqueeRect.size.height
+            )
+            context.saveGState()
+            context.setFillColor(CGColor(srgbRed: 0.15, green: 0.55, blue: 1, alpha: 0.10))
+            context.fill(rect)
+            context.setStrokeColor(chrome)
+            context.setLineWidth(2)
+            context.setLineDash(phase: 0, lengths: [6, 4])
+            context.stroke(rect)
+            context.restoreGState()
+        }
     }
 
     // MARK: - Coordinate mapping
@@ -208,6 +318,12 @@ public final class AnnotationCanvasView: NSView {
     public override func mouseDown(with event: NSEvent) {
         guard isInteractionEnabled else { return }
         let point = screenPoint(from: event)
+
+        if isSelectionMode {
+            beginSelectionGesture(at: point)
+            return
+        }
+
         mouseDownPoint = point
         dragPoints = [point]
         isDragging = true
@@ -222,8 +338,15 @@ public final class AnnotationCanvasView: NSView {
     }
 
     public override func mouseDragged(with event: NSEvent) {
-        guard isInteractionEnabled, isDragging else { return }
+        guard isInteractionEnabled else { return }
         let point = screenPoint(from: event)
+
+        if isSelectionMode {
+            updateSelectionGesture(to: point)
+            return
+        }
+
+        guard isDragging else { return }
         dragPoints.append(point)
         onDragUpdated?(point)
 
@@ -236,6 +359,11 @@ public final class AnnotationCanvasView: NSView {
     public override func mouseUp(with event: NSEvent) {
         guard isInteractionEnabled else { return }
         let point = screenPoint(from: event)
+
+        if isSelectionMode {
+            finishSelectionGesture(at: point)
+            return
+        }
 
         if isDragging, tool.isDragBased {
             dragPoints.append(point)
@@ -273,7 +401,137 @@ public final class AnnotationCanvasView: NSView {
         isDragging = false
         dragPoints = []
         mouseDownPoint = nil
+        resetSelectionGesture()
         needsDisplay = true
+    }
+
+    // MARK: - Selection gestures
+
+    /// Starts a selection gesture on a mouse-down.
+    ///
+    /// A press on a mark moves it (or the whole selection when it is part of
+    /// one); a press on empty canvas stretches a marquee. The drawing-key
+    /// gate and the pause gate apply upstream, exactly as they gate ink.
+    private func beginSelectionGesture(at point: Point) {
+        mouseDownPoint = point
+        isDragging = true
+
+        if let hit = Annotation.annotation(at: point, in: annotations, on: screen) {
+            // Marks outside this canvas's screen cannot be hit, so the
+            // selection the tap owns is always local-friendly.
+            let group = selectedIDs.contains(hit.id) ? selectedIDs : [hit.id]
+            let originals = annotations.filter { group.contains($0.id) }
+            guard !originals.isEmpty else {
+                selectionGesture = .none
+                return
+            }
+            selectionGesture = .move(start: point, originals: originals)
+            if group != selectedIDs {
+                // Tapping a mark that is not part of the selection makes it
+                // the selection before the drag moves it.
+                onSelectionCommitted?(group)
+            }
+        } else {
+            selectionGesture = .marquee(start: point)
+            marqueeRect = Rect(origin: point, size: Size(width: 0, height: 0))
+            needsDisplay = true
+        }
+    }
+
+    /// Advances the in-flight selection gesture on a drag.
+    private func updateSelectionGesture(to point: Point) {
+        switch selectionGesture {
+        case .marquee(let start):
+            marqueeRect = Annotation.dragBounds(from: start, to: point)
+            needsDisplay = true
+        case .move(let start, let originals):
+            var delta = Vector(dx: point.x - start.x, dy: point.y - start.y)
+            delta = clampedTranslation(delta, for: originals)
+            moveDelta = delta
+            movePreview = Dictionary(uniqueKeysWithValues: originals.map {
+                ($0.id, $0.moved(by: delta))
+            })
+            needsDisplay = true
+        case .none:
+            break
+        }
+    }
+
+    /// Ends the in-flight selection gesture on a mouse-up.
+    private func finishSelectionGesture(at point: Point) {
+        let down = mouseDownPoint ?? point
+        let isDrag = down.distance(to: point) >= 3
+
+        switch selectionGesture {
+        case .marquee:
+            if isDrag, let rect = marqueeRect {
+                // Marquee selects by bounds intersection, matching what the
+                // user sees highlighted while the rectangle stretches.
+                onSelectionCommitted?(Set(
+                    annotations
+                        .filter { $0.bounds.intersects(rect) }
+                        .map(\.id)
+                ))
+            } else {
+                // A click on empty canvas clears the selection; empty commit
+                // and clear are the same event for the app layer.
+                onSelectionCommitted?([])
+            }
+        case .move(_, let originals):
+            if moveDelta != Vector(dx: 0, dy: 0) {
+                onSelectionMoved?(originals.map { $0.moved(by: moveDelta) })
+            }
+            // A click with no drag already committed its selection on the
+            // way down; nothing more to do.
+        case .none:
+            break
+        }
+
+        resetSelectionGesture()
+        isDragging = false
+        mouseDownPoint = nil
+    }
+
+    /// The largest translation that keeps the whole moving group on the
+    /// screen this canvas covers.
+    private func clampedTranslation(_ delta: Vector, for originals: [Annotation]) -> Vector {
+        guard screen.size.width > 0, screen.size.height > 0 else { return delta }
+
+        var lowerX = -Double.infinity
+        var upperX = Double.infinity
+        var lowerY = -Double.infinity
+        var upperY = Double.infinity
+        for annotation in originals {
+            lowerX = max(lowerX, screen.minX - annotation.bounds.minX)
+            upperX = min(upperX, screen.maxX - annotation.bounds.maxX)
+            lowerY = max(lowerY, screen.minY - annotation.bounds.minY)
+            upperY = min(upperY, screen.maxY - annotation.bounds.maxY)
+        }
+        // A group wider (or taller) than the screen has no clamping range;
+        // let it move freely rather than fighting the gesture.
+        var clamped = delta
+        if lowerX <= upperX {
+            clamped.dx = min(max(delta.dx, lowerX), upperX)
+        }
+        if lowerY <= upperY {
+            clamped.dy = min(max(delta.dy, lowerY), upperY)
+        }
+        return clamped
+    }
+
+    /// Drops any in-flight selection gesture.
+    ///
+    /// Previews are display-only — the committed document never saw them —
+    /// so discarding restores the marks by simply forgetting the mapping.
+    private func resetSelectionGesture() {
+        let hadGesture = selectionGesture != .none || marqueeRect != nil || !movePreview.isEmpty
+        selectionGesture = .none
+        marqueeRect = nil
+        moveDelta = .zero
+        movePreview = [:]
+        if hadGesture {
+            needsDisplay = true
+        }
     }
 
     // MARK: - Right-click deletion

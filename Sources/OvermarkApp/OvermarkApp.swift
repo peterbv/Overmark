@@ -195,6 +195,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 400_000_000)
             step("laser pointer off")
 
+            // The selection mode: gestures highlight or move what is already
+            // drawn. Toggling pushes the state to the canvases (and back off
+            // leaves a drawing-first gesture set).
+            coordinator.isSelectionMode = true
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("selection mode on")
+            FileHandle.standardError.write(Data(
+                "[PROBE] selection: \(coordinator.isSelectionMode), state \(coordinator.debugOverlayState())\n".utf8
+            ))
+            coordinator.isSelectionMode = false
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("selection mode off")
+
             // The configurable lens exercises the in-place update path:
             // resizing, then the quick refresh cadence, then mirroring (a
             // toggle the refresh loop starts pushing to other displays on

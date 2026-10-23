@@ -96,6 +96,72 @@ struct AnnotationDocumentTests {
         #expect(undone == AnnotationDocument.historyLimit)
     }
 
+    @Test("A batch update is a single undo step")
+    func batchUpdateIsOneUndoStep() {
+        var document = AnnotationDocument()
+        document.add(Annotation(tool: .pen))
+        let second = Annotation(tool: .rectangle)
+        document.add(second)
+
+        let moved = second.moved(by: Vector(dx: 10, dy: 0))
+
+        let replaced = document.update([moved])
+        #expect(replaced)
+        #expect(document.count == 2)
+        let appliedSecond = document.annotations[1] == moved
+        #expect(appliedSecond)
+
+        let undone = document.undo()
+        #expect(undone)
+        let restoredSecond = document.annotations[1] == second
+        #expect(restoredSecond)
+
+        #expect(document.canRedo)
+        let redone = document.redo()
+        #expect(redone)
+        let redoneSecond = document.annotations[1] == moved
+        #expect(redoneSecond)
+    }
+
+    @Test("A batch remove is a single undo step")
+    func batchRemoveIsOneUndoStep() {
+        var document = AnnotationDocument()
+        let first = Annotation(tool: .pen)
+        let second = Annotation(tool: .arrow)
+        document.add(first)
+        document.add(second)
+
+        let removed = document.remove(ids: [first.id, second.id])
+
+        #expect(removed.count == 2)
+        #expect(document.isEmpty)
+
+        let undone = document.undo()
+        #expect(undone)
+        #expect(document.count == 2)
+
+        let redone = document.redo()
+        #expect(redone)
+        #expect(document.isEmpty)
+    }
+
+    @Test("A no-op batch does not touch the history")
+    func noOpBatchKeepsHistory() {
+        var document = AnnotationDocument()
+        document.add(Annotation(tool: .pen))
+
+        let updatedNothing = document.update([])
+        #expect(!updatedNothing)
+        let removedUnknown = document.remove(ids: [Annotation.ID()])
+        #expect(removedUnknown.isEmpty)
+        #expect(!document.canRedo)
+
+        // Only the original add is undoable.
+        let undone = document.undo()
+        #expect(undone)
+        #expect(document.isEmpty)
+    }
+
     @Test("Encoding persists the annotations but not the history")
     func codable() throws {
         var document = AnnotationDocument()

@@ -81,6 +81,55 @@ public struct AnnotationDocument: Hashable, Sendable, Codable {
         annotations[index] = annotation
     }
 
+    /// Replaces every annotation with a matching id, recording one history
+    /// entry for the whole batch.
+    ///
+    /// Selection gestures commit this way: dragging five marks around is one
+    /// user action, so one undo step must bring all five back. The order of
+    /// `annotations` is preserved — replacements happen in place instead of
+    /// reshuffling — because painting order is the z-order the user drew in.
+    /// Returns `true` when at least one annotation was replaced.
+    @discardableResult
+    public mutating func update(
+        _ newAnnotations: [Annotation],
+        recordHistory shouldRecord: Bool = true
+    ) -> Bool {
+        var replaced = false
+        for annotation in newAnnotations {
+            guard let index = annotations.firstIndex(where: { $0.id == annotation.id }) else {
+                continue
+            }
+            if !replaced, shouldRecord {
+                recordHistory()
+            }
+            annotations[index] = annotation
+            replaced = true
+        }
+        return replaced
+    }
+
+    /// Removes the annotations with the given ids, recording one history
+    /// entry for the whole batch.
+    ///
+    /// `recordHistory: false` keeps parity with the single-annotation
+    /// removal: stateless removals (the auto-erase timer) never pick this
+    /// path, but the flag keeps the batch symmetric with `update`.
+    /// Returns the annotations that were actually removed.
+    @discardableResult
+    public mutating func remove(
+        ids: Set<Annotation.ID>,
+        recordHistory shouldRecord: Bool = true
+    ) -> [Annotation] {
+        guard !ids.isEmpty else { return [] }
+        let removed = annotations.filter { ids.contains($0.id) }
+        guard !removed.isEmpty else { return [] }
+        if shouldRecord {
+            recordHistory()
+        }
+        annotations.removeAll { ids.contains($0.id) }
+        return removed
+    }
+
     /// Removes every annotation.
     public mutating func removeAll() {
         guard !annotations.isEmpty else { return }

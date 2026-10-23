@@ -362,6 +362,11 @@ struct AnnotationToolbarView: View {
                     systemImage: Self.toolSymbols[tool] ?? "pencil",
                     isSelected: coordinator.settings.tool == tool
                 ) {
+                    // Picking a drawing tool leaves the selection mode: the
+                    // next drag draws instead of marquee-ing.
+                    if coordinator.isSelectionMode {
+                        coordinator.isSelectionMode = false
+                    }
                     coordinator.settings.tool = tool
                 }
             }
@@ -384,8 +389,18 @@ struct AnnotationToolbarView: View {
             AnnotationControlButton(
                 systemImage: "trash",
                 isEnabled: !coordinator.document.annotations.isEmpty
+                    || !coordinator.selectionIDs.isEmpty,
+                help: L10n.tr(
+                    coordinator.selectionIDs.isEmpty
+                        ? "Clear the canvas"
+                        : "Delete the selected annotations."
+                )
             ) {
-                coordinator.clearAll()
+                if coordinator.selectionIDs.isEmpty {
+                    coordinator.clearAll()
+                } else {
+                    coordinator.deleteSelection()
+                }
             }
 
             Divider()
@@ -482,6 +497,21 @@ struct AnnotationToolbarView: View {
                 )
             ) {
                 coordinator.toggleWhiteboard()
+            }
+
+            // Marquee selection: while it is on, gestures highlight or move
+            // what is already drawn instead of creating new marks; the
+            // palette recolors the selection and the trash deletes it.
+            EffectButton(
+                systemImage: "cursorarrow.and.square.on.square.dashed",
+                isSelected: coordinator.isSelectionMode,
+                help: L10n.tr(
+                    coordinator.isSelectionMode
+                        ? "Move annotations is on: gestures move instead of drawing. Click the button again to draw."
+                        : "Move annotations: drag a marquee to select, drag a selection to move it, use the palette to recolor it, and the trash to delete it."
+                )
+            ) {
+                coordinator.toggleSelectionMode()
             }
 
             AnnotationControlButton(

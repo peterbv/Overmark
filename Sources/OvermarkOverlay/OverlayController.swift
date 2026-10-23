@@ -67,6 +67,13 @@ public final class OverlayController {
     /// away the same way as the whiteboard board.
     private var isFreezeVisible = true
 
+    /// Whether the canvases route gestures to selection (the marquee-move
+    /// mode) instead of drawing.
+    public private(set) var isSelectionModeActive = false
+    /// The annotation ids currently highlighted, kept so freshly built
+    /// canvases come up with the selection chrome already on.
+    private var selectionIDs: Set<Annotation.ID> = []
+
     /// The handler invoked when a canvas produces an annotation.
     private var onAnnotationCreated: ((Annotation) -> Void)?
     /// The handler invoked when the canvas is clicked.
@@ -75,6 +82,12 @@ public final class OverlayController {
     private var onAnnotationDelete: ((Annotation) -> Void)?
 
     private var onAnnotationEdit: ((Annotation) -> Void)?
+
+    /// The handler invoked when the canvas changes the selection (the empty
+    /// set means the selection was cleared).
+    private var onSelectionCommitted: ((Set<Annotation.ID>) -> Void)?
+    /// The handler invoked when a drag finishes moving selected annotations.
+    private var onSelectionMoved: (([Annotation]) -> Void)?
 
     public init() {}
 
@@ -177,6 +190,14 @@ public final class OverlayController {
             // a display change cannot blink the still away).
             applyFreeze(to: screen.displayID, canvas: canvas)
 
+            // Fresh canvases inherit the live selection state (the gesture
+            // mode and the highlighted ids) plus the selection callbacks,
+            // exactly like the board and freeze states above.
+            canvas.isSelectionMode = isSelectionModeActive
+            canvas.selectedIDs = selectionIDs
+            canvas.onSelectionCommitted = onSelectionCommitted
+            canvas.onSelectionMoved = onSelectionMoved
+
             panel.contentView = canvas
             panel.presentAboveAll()
 
@@ -202,6 +223,24 @@ public final class OverlayController {
     public func setAnnotations(_ annotations: [Annotation]) {
         for entry in entries.values {
             entry.canvas.annotations = annotations
+        }
+    }
+
+    /// Switches every canvas between drawing and the marquee-selection mode.
+    public func setSelectionMode(_ active: Bool) {
+        guard active != isSelectionModeActive else { return }
+        isSelectionModeActive = active
+        for entry in entries.values {
+            entry.canvas.isSelectionMode = active
+        }
+    }
+
+    /// Highlights the given annotation ids on every canvas.
+    public func setSelection(_ ids: Set<Annotation.ID>) {
+        guard ids != selectionIDs else { return }
+        selectionIDs = ids
+        for entry in entries.values {
+            entry.canvas.selectedIDs = ids
         }
     }
 
@@ -336,18 +375,24 @@ public final class OverlayController {
         onAnnotationCreated: @escaping (Annotation) -> Void,
         onClick: @escaping (Point) -> Void,
         onAnnotationDelete: @escaping (Annotation) -> Void,
-        onAnnotationEdit: @escaping (Annotation) -> Void
+        onAnnotationEdit: @escaping (Annotation) -> Void,
+        onSelectionCommitted: @escaping (Set<Annotation.ID>) -> Void,
+        onSelectionMoved: @escaping ([Annotation]) -> Void
     ) {
         self.onAnnotationCreated = onAnnotationCreated
         self.onClick = onClick
         self.onAnnotationDelete = onAnnotationDelete
         self.onAnnotationEdit = onAnnotationEdit
+        self.onSelectionCommitted = onSelectionCommitted
+        self.onSelectionMoved = onSelectionMoved
 
         for entry in entries.values {
             entry.canvas.onAnnotationCreated = onAnnotationCreated
             entry.canvas.onClick = onClick
             entry.canvas.onAnnotationDelete = onAnnotationDelete
             entry.canvas.onAnnotationEdit = onAnnotationEdit
+            entry.canvas.onSelectionCommitted = onSelectionCommitted
+            entry.canvas.onSelectionMoved = onSelectionMoved
         }
     }
 
@@ -412,7 +457,8 @@ public final class OverlayController {
         }.joined(separator: ", ")
         let board = " board=\(isWhiteboardActive ? whiteboardStyle.rawValue : "off") visible=\(isBoardVisible)"
         let freeze = " freeze=\(isFreezeActive ? (isFreezeVisible ? "on \(freezeImages.count)" : "folded") : "off")"
-        return "[OVERLAY] \(mode)\(board)\(freeze) panels: [\(panels)]"
+        let selection = " sel=\(isSelectionModeActive ? "on" : "off") n=\(selectionIDs.count)"
+        return "[OVERLAY] \(mode)\(board)\(freeze)\(selection) panels: [\(panels)]"
     }
 
     /// Starts watching the drawing key for the hold-to-draw mode.
