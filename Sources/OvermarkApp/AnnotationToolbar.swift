@@ -19,17 +19,15 @@ final class AnnotationToolbarController {
     private let coordinator: AppCoordinator
     private var panel: OverlayPanel?
 
-    /// Expanded (all controls) vs collapsed into a corner tab by the
+    /// Expanded (all controls) vs collapsed into the dock tab by the
     /// auto-hide behaviour.
     private var isExpanded = true
     /// Pin button in the toolbar: collapse to a small tab when the
     /// cursor is away, expand on hover.
     private var isAutoHide = false
-    /// Which edges of the expanded bar the collapsed tab is glued to.
-    /// Expansion inverts them: the bar has to grow back around the same
-    /// corner, or every pin cycle shoves it one bar-width further out.
-    private var isTabAnchoredToRight = false
-    private var isTabAnchoredToTop = false
+    /// The tab never drifts: it always waits in the dock slot of the
+    /// configured edge. The dock itself lives in the coordinator, so a
+    /// Settings change re-docks a live bar through `reapplyDock()`.
     private var autoCollapseTask: Task<Void, Never>?
     private var shortcutsWindow: HelpPanel?
 
@@ -41,15 +39,7 @@ final class AnnotationToolbarController {
     func show(on screen: NSScreen) {
         hide()
 
-        let size = Self.barSize
-        let frame = screen.frame
-        let menuBarHeight = max(frame.height - screen.visibleFrame.height, 0)
-        let rect = NSRect(
-            x: frame.midX - size.width / 2,
-            y: frame.maxY - menuBarHeight - size.height - 12,
-            width: size.width,
-            height: size.height
-        )
+        let rect = dockRect(for: screen)
 
         let panel = OverlayPanel(contentRect: rect)
         panel.setFrame(rect, display: true)
@@ -61,7 +51,7 @@ final class AnnotationToolbarController {
         panel.isMovableByWindowBackground = true
         isExpanded = true
         panel.contentView = makeExpandedContent(
-            handleFrame: NSRect(x: size.width / 2 - 40, y: size.height - 16, width: 80, height: 12)
+            handleFrame: NSRect(x: rect.width / 2 - 40, y: rect.height - 16, width: 80, height: 12)
         )
         panel.orderFrontRegardless()
 
@@ -119,6 +109,110 @@ final class AnnotationToolbarController {
         origin.x = min(max(origin.x, union.minX - frame.width + 120), union.maxX - 120)
         origin.y = min(max(origin.y, union.minY - frame.height + 80), union.maxY - 80)
         window.setFrameOrigin(origin)
+    }
+
+    // MARK: Docking
+
+    /// Re-docks the bar on the configured edge without rebuilding it:
+    /// an expanded bar lands on the dock rect, a folded one on the dock
+    /// tab slot. This is the live path when Settings changes the edge
+    /// during a session.
+    func reapplyDock() {
+        guard let panel else { return }
+        guard let screen = dockingScreen(for: panel.frame) else { return }
+        let target = isExpanded ? dockRect(for: screen) : tabSlot(for: screen)
+        panel.setFrame(target, display: true, animate: true)
+    }
+
+    /// The screen that should carry the bar: the one holding the frame's
+    /// centre, falling back to the main screen.
+    private func dockingScreen(for frame: NSRect) -> NSScreen? {
+        NSScreen.screens.first {
+            $0.frame.contains(NSPoint(x: frame.midX, y: frame.midY))
+        } ?? NSScreen.main ?? NSScreen.screens.first
+    }
+
+    /// The expanded bar's home for the configured dock edge, kept clear
+    /// of the menu bar (top), the Dock (bottom) and the screen edges
+    /// (sides).
+    private func dockRect(for screen: NSScreen) -> NSRect {
+        let size = Self.barSize
+        let frame = screen.frame
+        let menuBarHeight = max(frame.height - screen.visibleFrame.height, 0)
+        let margin: CGFloat = 12
+        switch coordinator.toolbarDock {
+        case .top:
+            return NSRect(
+                x: frame.midX - size.width / 2,
+                y: frame.maxY - menuBarHeight - size.height - margin,
+                width: size.width,
+                height: size.height
+            )
+        case .bottom:
+            return NSRect(
+                x: frame.midX - size.width / 2,
+                y: screen.visibleFrame.minY + margin,
+                width: size.width,
+                height: size.height
+            )
+        case .leading:
+            return NSRect(
+                x: frame.minX + margin,
+                y: frame.minY + (frame.height - size.height) / 2,
+                width: size.width,
+                height: size.height
+            )
+        case .trailing:
+            return NSRect(
+                x: frame.maxX - size.width - margin,
+                y: frame.minY + (frame.height - size.height) / 2,
+                width: size.width,
+                height: size.height
+            )
+        }
+    }
+
+    /// The little tab's permanent waiting slot: glued to the docked edge
+    /// and centred along it, so the presenter can find the tab blind. A
+    /// horizontal dock parks a wide pill; a side dock parks a tall one.
+    private func tabSlot(for screen: NSScreen) -> NSRect {
+        let frame = screen.frame
+        let menuBarHeight = max(frame.height - screen.visibleFrame.height, 0)
+        let margin: CGFloat = 6
+        let horizontal = coordinator.toolbarDock.isHorizontal
+        let tabSize = horizontal
+            ? NSSize(width: 48, height: 12)
+            : NSSize(width: 12, height: 48)
+        switch coordinator.toolbarDock {
+        case .top:
+            return NSRect(
+                x: frame.midX - tabSize.width / 2,
+                y: frame.maxY - menuBarHeight - tabSize.height - margin,
+                width: tabSize.width,
+                height: tabSize.height
+            )
+        case .bottom:
+            return NSRect(
+                x: frame.midX - tabSize.width / 2,
+                y: screen.visibleFrame.minY + margin,
+                width: tabSize.width,
+                height: tabSize.height
+            )
+        case .leading:
+            return NSRect(
+                x: frame.minX + margin,
+                y: frame.minY + (frame.height - tabSize.height) / 2,
+                width: tabSize.width,
+                height: tabSize.height
+            )
+        case .trailing:
+            return NSRect(
+                x: frame.maxX - tabSize.width - margin,
+                y: frame.minY + (frame.height - tabSize.height) / 2,
+                width: tabSize.width,
+                height: tabSize.height
+            )
+        }
     }
 
     // MARK: Auto-hide docking
@@ -198,38 +292,15 @@ final class AnnotationToolbarController {
         guard let panel, isExpanded else { return }
         isExpanded = false
 
+        // The tab is a parked dock slot, not a glued-to-the-bar corner:
+        // it always waits where the configured dock says, on the screen
+        // the bar currently lives on. The presenter finds it blind no
+        // matter where the bar itself was dragged.
         let frame = panel.frame
-        let screenFrame = NSScreen.screens.first { $0.frame.intersects(frame) }?.frame
-            ?? NSScreen.main?.frame ?? frame
-        let tabSize = NSSize(width: 48, height: 12)
-        var origin = frame.origin
-        // Keep the tab anchored on whichever side of the screen the bar
-        // was closest to — and remember the edges it is glued to, so
-        // expanding reverses exactly this collapse.
-        if frame.midX >= screenFrame.midX {
-            origin.x = frame.maxX - tabSize.width
-            isTabAnchoredToRight = true
-        } else {
-            isTabAnchoredToRight = false
-        }
-        if frame.midY >= screenFrame.midY {
-            origin.y = frame.maxY - tabSize.height
-            isTabAnchoredToTop = true
-        } else {
-            isTabAnchoredToTop = false
-            origin.y = frame.minY
-        }
-        // The tab is the only way back to the controls once pinned, so it
-        // must never sit beyond the desktop: a bar dragged mostly off
-        // screen would otherwise park its tab out of reach.
-        let union = NSScreen.screens.dropFirst().reduce(
-            NSScreen.screens.first?.frame ?? frame
-        ) { $0.union($1.frame) }
-        origin.x = min(max(origin.x, union.minX), union.maxX - tabSize.width)
-        origin.y = min(max(origin.y, union.minY), union.maxY - tabSize.height)
-        let tab = NSRect(origin: origin, size: tabSize)
+        guard let screen = dockingScreen(for: frame) else { return }
+        let tab = tabSlot(for: screen)
 
-        let tabView = DragHandleView(frame: NSRect(origin: .zero, size: tabSize))
+        let tabView = DragHandleView(frame: NSRect(origin: .zero, size: tab.size))
         tabView.toolTip = L10n.tr("Show the controls")
         tabView.onMouseEnter = { [weak self] in self?.handleHoverEnter() }
         let tabContents = tabView
@@ -241,31 +312,13 @@ final class AnnotationToolbarController {
         guard let panel, !isExpanded else { return }
         isExpanded = true
 
-        // Grow back around the tab's glued corner, not from the tab's
-        // origin: the collapse pinned the tab to the bar's edge (right
-        // or left, top or bottom), so the expanded bar returns to the
-        // exact spot it collapsed from. Growing from the tab's origin
-        // instead pushed the whole bar one bar-width outward per pin
-        // cycle, and the 120 pt-visible drag clamp let it walk off the
-        // desktop until the tab itself sat beyond reach.
-        let size = Self.barSize
-        let tab = panel.frame
-        var origin = tab.origin
-        if isTabAnchoredToRight {
-            origin.x = tab.maxX - size.width
-        }
-        if isTabAnchoredToTop {
-            origin.y = tab.maxY - size.height
-        }
-
-        // Safety net for rearranged displays while the bar was folded:
-        // keep the complete bar on some screen rather than half of it.
-        let union = NSScreen.screens.dropFirst().reduce(
-            NSScreen.screens.first?.frame ?? tab
-        ) { $0.union($1.frame) }
-        origin.x = min(max(origin.x, union.minX), union.maxX - size.width)
-        origin.y = min(max(origin.y, union.minY), union.maxY - size.height)
-        let target = NSRect(origin: origin, size: size)
+        // Expand into the dock, not around the tab: the tab already sits
+        // in the dock slot, so the bar grows back to exactly the home the
+        // dock prescribes. Growing around the tab's origin is what used
+        // to walk the whole bar off the desktop one pin cycle at a time
+        // (the 120 pt drag clamp let it, and the tab went with it).
+        guard let screen = dockingScreen(for: panel.frame) else { return }
+        let target = dockRect(for: screen)
 
         panel.contentView = makeExpandedContent(
             handleFrame: NSRect(
@@ -929,7 +982,9 @@ private final class DragHandleView: NSView {
         window.performDrag(with: event)
         NSCursor.arrow.set()
         clampIntoVisibleArea()
-        snapToNearestCorner()
+        // No corner snapping: free dragging plus the dock (the tab slot
+        // where the collapsed bar waits, and the rect the bar expands
+        // into) are the only magnets now.
     }
 
     /// Keeps the bar from being dragged completely off the desktop.
@@ -947,40 +1002,6 @@ private final class DragHandleView: NSView {
         origin.x = min(max(origin.x, union.minX - frame.width + 120), union.maxX - 120)
         origin.y = min(max(origin.y, union.minY - frame.height + 80), union.maxY - 80)
         window.setFrameOrigin(origin)
-    }
-
-    /// Magnetically glues the bar to a screen corner when the drop
-    /// happens near one. `visibleFrame` keeps it clear of the menu bar
-    /// and the Dock. When the bar is collapsed into its tab it snaps as
-    /// a tab.
-    private func snapToNearestCorner() {
-        guard let window else { return }
-        let frame = window.frame
-        let screen = NSScreen.screens.first {
-            $0.frame.contains(NSPoint(x: frame.midX, y: frame.midY))
-        } ?? NSScreen.main
-        guard let visible = screen?.visibleFrame else { return }
-
-        let margin: CGFloat = 6
-        let width = frame.width
-        let height = frame.height
-        let candidates: [(x: CGFloat, y: CGFloat)] = [
-            (visible.minX + margin, visible.maxY - height - margin),
-            (visible.maxX - width - margin, visible.maxY - height - margin),
-            (visible.minX + margin, visible.minY + margin),
-            (visible.maxX - width - margin, visible.minY + margin),
-        ]
-
-        let current = frame.origin
-        let best = candidates
-            .map { candidate -> (NSPoint, CGFloat) in
-                let target = NSPoint(x: candidate.x, y: candidate.y)
-                return (target, abs(candidate.x - current.x) + abs(candidate.y - current.y))
-            }
-            .filter { $0.1 < 90 }
-            .min { $0.1 < $1.1 }
-        guard let snapped = best else { return }
-        window.setFrameOrigin(snapped.0)
     }
 
     override func draw(_ dirtyRect: NSRect) {

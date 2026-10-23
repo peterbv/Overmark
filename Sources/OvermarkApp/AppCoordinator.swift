@@ -79,6 +79,16 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
+    /// Which screen edge the floating toolbar docks on, and where its
+    /// collapsed tab always waits. Persisted between launches.
+    @Published public var toolbarDock: ToolbarDock = .top {
+        didSet {
+            guard toolbarDock != oldValue else { return }
+            PreferencesStore.save(toolbarDock)
+            toolbar?.reapplyDock()
+        }
+    }
+
     /// Whether the screens show a frozen frame instead of the live desktop.
     ///
     /// Like the board, the freeze is an overlay state inside the running
@@ -311,6 +321,10 @@ public final class AppCoordinator: ObservableObject {
         cursorEffects = PreferencesStore.loadCursorEffects()
         whiteboardStyle = PreferencesStore.loadWhiteboardStyle()
         drawingModifier = PreferencesStore.loadDrawingModifier()
+        // The toolbar exists until later in this initializer, so the dock
+        // didSet may find no bar to move; `show` reads the restored dock
+        // when the first session begins.
+        toolbarDock = PreferencesStore.loadToolbarDock()
 
         hotKeys.onAction = { [weak self] action in
             self?.handle(action)

@@ -214,6 +214,29 @@ public enum DrawingModifier: String, Hashable, Sendable, Codable, CaseIterable, 
     }
 }
 
+/// Where the floating toolbar docks, and therefore where the collapsed
+/// tab that brings it back always lives.
+///
+/// The dock is a screen edge, not a free-floating position: the tab has to
+/// stay put so a presenter can find it blind, which is exactly what the
+/// owner asked for after the tab kept drifting with each pin cycle.
+public enum ToolbarDock: String, Hashable, Sendable, Codable, CaseIterable, Identifiable {
+    case top
+    case bottom
+    case leading
+    case trailing
+
+    public var id: String { rawValue }
+
+    /// Whether the docked bar is wider than it is tall (horizontal docks)
+    /// or taller than it is wide (side docks). The vertical layout arrives
+    /// in a later round; for now side docks keep the horizontal bar glued
+    /// to the chosen edge.
+    public var isHorizontal: Bool {
+        self == .top || self == .bottom
+    }
+}
+
 /// The tools and styles the user has selected.
 public struct ToolSettings: Hashable, Sendable, Codable {
     public var tool: AnnotationTool

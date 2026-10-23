@@ -333,5 +333,15 @@ public enum L10n {
         "Export PDF…": "Exportar PDF…",
         "Overmark couldn't encode the export.": "Overmark no pudo codificar la exportación.",
         "Overmark couldn't save the export.": "Overmark no pudo guardar la exportación.",
+
+        // Toolbar dock.
+        "Floating bar": "Barra flotante",
+        "Toolbar dock": "Anclaje de la barra",
+        "Dock at the top": "Arriba",
+        "Dock at the bottom": "Abajo",
+        "Dock on the left edge": "Lado izquierdo",
+        "Dock on the right edge": "Lado derecho",
+        "The bar starts on the chosen edge; grab it to drag it anywhere, and when it folds its little tab always waits in this dock.":
+            "La barra arranca en el lado elegido; agarrala para arrastrarla a donde quieras y, cuando se pliega, su pestañita siempre espera en este anclaje.",
     ]
 }

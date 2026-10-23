@@ -208,6 +208,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 400_000_000)
             step("selection mode off")
 
+            // The configured dock: moving the edge re-docks a live bar in
+            // place, so a right-hand session keeps its tab on the right
+            // even when the presenter re-pins.
+            coordinator.toolbarDock = .trailing
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("toolbar re-docked trailing")
+            coordinator.toolbarDock = .bottom
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("toolbar re-docked bottom")
+            FileHandle.standardError.write(Data(
+                "[PROBE] dock: \(coordinator.toolbarDock)\n".utf8
+            ))
+            coordinator.toolbarDock = .top
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("toolbar re-docked top")
+
             // The configurable lens exercises the in-place update path:
             // resizing, then the quick refresh cadence, then mirroring (a
             // toggle the refresh loop starts pushing to other displays on

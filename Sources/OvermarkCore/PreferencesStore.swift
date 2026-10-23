@@ -12,6 +12,7 @@ public enum PreferencesStore {
     public static let favoriteColorsKey = "Overmark.favoriteColors"
     public static let whiteboardStyleKey = "Overmark.whiteboardStyle"
     public static let drawingModifierKey = "Overmark.drawingModifier"
+    public static let toolbarDockKey = "Overmark.toolbarDock"
 
     /// Maximum number of favourite colours kept; new ones push the oldest out.
     public static let favoriteLimit = 8
@@ -48,6 +49,12 @@ public enum PreferencesStore {
         read(DrawingModifier.self, key: drawingModifierKey, defaults) ?? .option
     }
 
+    public static func loadToolbarDock(
+        _ defaults: UserDefaults = .standard
+    ) -> ToolbarDock {
+        read(ToolbarDock.self, key: toolbarDockKey, defaults) ?? .top
+    }
+
     // MARK: - Save
 
     public static func save(_ settings: ToolSettings, _ defaults: UserDefaults = .standard) {
@@ -68,6 +75,10 @@ public enum PreferencesStore {
 
     public static func save(_ modifier: DrawingModifier, _ defaults: UserDefaults = .standard) {
         write(modifier, key: drawingModifierKey, defaults)
+    }
+
+    public static func save(_ dock: ToolbarDock, _ defaults: UserDefaults = .standard) {
+        write(dock, key: toolbarDockKey, defaults)
     }
 
     /// Adds a colour to the favourites, deduplicating within a small window.

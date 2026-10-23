@@ -368,6 +368,20 @@ struct SettingsView: View {
             }
 
             recordingSettings
+
+            Section(L10n.tr("Floating bar")) {
+                Picker(L10n.tr("Toolbar dock"), selection: $coordinator.toolbarDock) {
+                    ForEach(ToolbarDock.allCases) { dock in
+                        Text(dock.displayName).tag(dock)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(L10n.tr("The bar starts on the chosen edge; grab it to drag it anywhere, and when it folds its little tab always waits in this dock."))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .formStyle(.grouped)
     }
@@ -855,6 +869,18 @@ extension LensRefreshRate {
         switch self {
         case .normal: L10n.tr("Normal (~3 fps)")
         case .responsive: L10n.tr("Smooth (~8 fps)")
+        }
+    }
+}
+
+extension ToolbarDock {
+    /// The name shown in the dock picker, in the active language.
+    @MainActor var displayName: String {
+        switch self {
+        case .top: L10n.tr("Dock at the top")
+        case .bottom: L10n.tr("Dock at the bottom")
+        case .leading: L10n.tr("Dock on the left edge")
+        case .trailing: L10n.tr("Dock on the right edge")
         }
     }
 }
