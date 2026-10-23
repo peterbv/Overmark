@@ -283,6 +283,16 @@ presentaciones, sin congelar el escritorio.
     round-trip incl. campos nuevos; identidad, mapeo cruzado y guards del
     placement).
 
+25. Barra anclada que se fuga fuera del escritorio (`2c050fc`): colapsar
+    pegaba la pestaña a los bordes de la barra, pero reexpandir crecía
+    desde el *origen* de la pestaña y el clamp solo prometía 120 pt
+    visibles — cada ciclo de anclaje empujaba la barra un ancho completo
+    más afuera hasta que la propia pestaña quedaba inalcanzable. La
+    expansión ahora invierte el colapso (la esquina ancla devuelve la
+    barra al punto exacto de donde se plegó), la pestaña se clampa
+    íntegra dentro de las pantallas al plegarse y un clamp de
+    visibilidad completa cubre rearrangements de displays.
+
 `swift build` limpio · `swift test` verde: **145** pruebas Swift Testing (22 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda

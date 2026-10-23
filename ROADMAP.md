@@ -76,6 +76,16 @@
 
 ## Registro de decisiones
 
+- **23 oct 2026** — **Fix: la barra anclada ya no se fuga del escritorio**
+  (`2c050fc`). El colapso pegaba la pestaña a los bordes de la barra, pero
+  la expansión crecía desde el *origen* de la pestaña con el clamp de
+  arrastre (120 pt visibles) — cada ciclo empujaba la barra un ancho más
+  afuera hasta que la pestaña misma caía fuera de alcance. Ahora la
+  expansión invierte el colapso (esquina ancla → posición exacta
+  previa), la pestaña se clampa íntegra dentro de las pantallas al
+  plegarse y un clamp de visibilidad completa cubre el caso de displays
+  rearrangiados mientras la barra estaba plegada.
+
 - **23 oct 2026** — **#3 hecho: lupa configurable.** Tres piezas sobre la
   infraestructura existente. (1) `zoomSize` ya era persistido pero sin UI —
   slider 80–420 pt en Settings → Cursor. (2) La cadencia del loop de refresco
