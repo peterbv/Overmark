@@ -44,9 +44,11 @@ presentaciones, sin congelar el escritorio.
     (1–12 pt) y opacidad del relleno (0–80%), además del radio y color previos.
   - **Ondas de clic**: animación al pulsar (variante para el clic derecho),
     desactivable en Preferencias → Cursor → Animación de clic.
-  - **Auto-borrado temporizado**: los trazos se desvanecen solos tras un
-    retardo configurable (3–60 s). No toca nunca los números de paso y el
-    desvanecido no ensucia el deshacer.
+  - **Auto-borrado temporizado**: los trazos (formas y textos incluidos) se
+    desvanecen solos tras un retardo configurable (3–60 s). Los números de
+    paso también se desvanecen, con contador monótono: un número ya visto no
+    se reutiliza hasta que la pizarra se limpia o se restaura un documento.
+    El desvanecido no ensucia el deshacer.
   - **Edición de texto in situ**: con la herramienta Texto, un clic sobre un
     texto ya escrito lo reabre para corregirlo (mismo id/color/grosor).
   - **Preferencias persistentes**: herramienta, color, relleno, degradado,
@@ -216,6 +218,13 @@ presentaciones, sin congelar el escritorio.
     (`BoardStyle`), botón en barra + ☑ en menú + ⌘⇧B, pausa pliega el
     lienzo y el compositor de capturas añade el relleno del tablero
     (`boardFill` → `backdrop`). 4 tests nuevos del estilo del tablero.
+
+20. Auto-borrado de números de paso: las formas y el texto ya se
+    desvanecían (la nota del roadmap era imprecisa) — el cambio real fue
+    meter los sellos al temporizador y volver el contador monótono
+    (`stepNumberFloor`: un número mostrado no se reemite hasta que se
+    limpia o se restaura un documento). Footnote de Auto-borrado y tests
+    actualizados.
 
 `swift build` limpio · `swift test` verde: **109** pruebas Swift Testing (18 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de

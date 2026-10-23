@@ -44,7 +44,7 @@
 |---|---|---|---|---|
 | 5 | **Botón lápiz en la barra** | Alta | **Hecho** | Botón `pencil.tip` junto a pausa: bloquea el lápiz (cada clic dibuja, sin ⌥) / vuelve a requerir ⌥. El chip "captura todo" también alterna con un tap. |
 | 6 | **Tecla modificadora configurable** | Media | Propuesto | Elegir ⌥ / ⌃ / ⌘ en vez del ⌥ fijo. |
-| 7 | **Auto-borrado para formas y texto** | Media | Propuesto | El desvanecimiento hoy solo aplica a trazos dibujados; extender a rectángulos, elipses, flechas y números. |
+| 7 | **Auto-borrado para formas y texto** | Media | Hecho | Hallazgo: formas y texto ya se desvanecían (la nota original era imprecisa). Cambio real: los números de paso entran al temporizador y el contador se vuelve monótono (piso que solo `limpiar`/restaurar reinician) para no reutilizar números ya mostrados. |
 
 ## 3. Infraestructura / calidad
 
@@ -75,6 +75,16 @@
 
 ## Registro de decisiones
 
+- **22 oct 2026** — **#7 hecho: auto-borrado completo.** Hallazgo al
+  implementar: formas y texto **ya** se desvanecían (la nota original del
+  ítem era imprecisa — `isFadeable` cubre todo lo que produce anotaciones).
+  El cambio real: los **números de paso entran al temporizador** y el
+  contador pasa a ser **monótono** (`stepNumberFloor` en el coordinator,
+  elevado por cada sello que se desvanece; solo limpiar la pizarra o
+  restaurar un documento reinicia la numeración) para que un número visto
+  jamás se reemita tras el fade. Caso sutil cubierto: cuando se desvanece
+  el sello de mayor número mientras quedan otros presentes, el piso evita
+  que el siguiente sello repita un número ya mostrado.
 - **22 oct 2026** — **#2 hecho: pizarra dedicada.** Decisión de encaje: no es
   un `AppMode` nuevo sino **estado del overlay** — el canvas pinta el
   tablero opaco (blanco/negro, `BoardStyle` persistido en
