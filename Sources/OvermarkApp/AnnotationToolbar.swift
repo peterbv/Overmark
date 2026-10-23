@@ -25,6 +25,11 @@ final class AnnotationToolbarController {
     /// Pin button in the toolbar: collapse to a small tab when the
     /// cursor is away, expand on hover.
     private var isAutoHide = false
+    /// Which edges of the expanded bar the collapsed tab is glued to.
+    /// Expansion inverts them: the bar has to grow back around the same
+    /// corner, or every pin cycle shoves it one bar-width further out.
+    private var isTabAnchoredToRight = false
+    private var isTabAnchoredToTop = false
     private var autoCollapseTask: Task<Void, Never>?
     private var shortcutsWindow: HelpPanel?
 
@@ -199,15 +204,29 @@ final class AnnotationToolbarController {
         let tabSize = NSSize(width: 48, height: 12)
         var origin = frame.origin
         // Keep the tab anchored on whichever side of the screen the bar
-        // was closest to.
+        // was closest to — and remember the edges it is glued to, so
+        // expanding reverses exactly this collapse.
         if frame.midX >= screenFrame.midX {
             origin.x = frame.maxX - tabSize.width
+            isTabAnchoredToRight = true
+        } else {
+            isTabAnchoredToRight = false
         }
         if frame.midY >= screenFrame.midY {
             origin.y = frame.maxY - tabSize.height
+            isTabAnchoredToTop = true
         } else {
+            isTabAnchoredToTop = false
             origin.y = frame.minY
         }
+        // The tab is the only way back to the controls once pinned, so it
+        // must never sit beyond the desktop: a bar dragged mostly off
+        // screen would otherwise park its tab out of reach.
+        let union = NSScreen.screens.dropFirst().reduce(
+            NSScreen.screens.first?.frame ?? frame
+        ) { $0.union($1.frame) }
+        origin.x = min(max(origin.x, union.minX), union.maxX - tabSize.width)
+        origin.y = min(max(origin.y, union.minY), union.maxY - tabSize.height)
         let tab = NSRect(origin: origin, size: tabSize)
 
         let tabView = DragHandleView(frame: NSRect(origin: .zero, size: tabSize))
@@ -222,15 +241,31 @@ final class AnnotationToolbarController {
         guard let panel, !isExpanded else { return }
         isExpanded = true
 
-        // Grow back around the tab's anchor corner, kept on screen.
-        let current = panel.frame
+        // Grow back around the tab's glued corner, not from the tab's
+        // origin: the collapse pinned the tab to the bar's edge (right
+        // or left, top or bottom), so the expanded bar returns to the
+        // exact spot it collapsed from. Growing from the tab's origin
+        // instead pushed the whole bar one bar-width outward per pin
+        // cycle, and the 120 pt-visible drag clamp let it walk off the
+        // desktop until the tab itself sat beyond reach.
+        let size = Self.barSize
+        let tab = panel.frame
+        var origin = tab.origin
+        if isTabAnchoredToRight {
+            origin.x = tab.maxX - size.width
+        }
+        if isTabAnchoredToTop {
+            origin.y = tab.maxY - size.height
+        }
+
+        // Safety net for rearranged displays while the bar was folded:
+        // keep the complete bar on some screen rather than half of it.
         let union = NSScreen.screens.dropFirst().reduce(
-            NSScreen.screens.first?.frame ?? current
+            NSScreen.screens.first?.frame ?? tab
         ) { $0.union($1.frame) }
-        var origin = current.origin
-        origin.x = min(max(origin.x, union.minX - Self.barSize.width + 120), union.maxX - 120)
-        origin.y = min(max(origin.y, union.minY - Self.barSize.height + 80), union.maxY - 80)
-        let target = NSRect(origin: origin, size: Self.barSize)
+        origin.x = min(max(origin.x, union.minX), union.maxX - size.width)
+        origin.y = min(max(origin.y, union.minY), union.maxY - size.height)
+        let target = NSRect(origin: origin, size: size)
 
         panel.contentView = makeExpandedContent(
             handleFrame: NSRect(
