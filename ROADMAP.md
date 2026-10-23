@@ -15,7 +15,8 @@
   corrupción).
 - Auto-borrado de trazos dibujados con tiempo configurable.
 - Efectos de cursor: anillo (círculo/squircle/rombo), ripples de clic,
-  spotlight, lupa, zoom y puntero láser (rastro luminoso) — configurables
+  spotlight, lupa (tamaño 80–420, refresco normal/fluida, espejo en otras
+  pantallas), zoom y puntero láser (rastro luminoso) — configurables
   y persistidos.
 - Colores: paleta integrada + favoritos del usuario (máx. 8) + panel de
   selección; gradiente por anotación; relleno por anotación.
@@ -28,7 +29,7 @@
 - Pizarra dedicada como estado del overlay (sesión activa, ☑ en menú y
   barra, ⌘⇧B) con tono blanco/negro persistido; pausa pliega el lienzo
   y las capturas componen el relleno del tablero.
-- 140 tests (22 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
+- 145 tests (22 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
 
 ## 1. Funciones nuevas (mayor valor)
 
@@ -36,7 +37,7 @@
 |---|---|---|---|---|
 | 1 | **Persistencia de documentos de anotación** | Alta | **Hecho** | Autosave por documento + lista para retomar (pestaña Documentos). Undo/limpiar/borrado por clic derecho intactos. |
 | 2 | **Pizarra dedicada** | Alta | **Hecho** | Estado del overlay dentro de la sesión (no un modo nuevo): cubre las pantallas del scope con lienzo blanco o negro; botón en barra, ☑ en menú, ⌘⇧B. Pausa muestra el desktop con la pizarra plegada. Copiar/guardar composite el relleno. |
-| 3 | **Lupa configurable** | Media | Propuesto | Limitada: ~3 fps y solo la pantalla del cursor (pantalla extra queda con snapshot de entrada). Ajustar tamaño, zoom, fps; opción de espejo en segunda pantalla. |
+| 3 | **Lupa configurable** | Media | **Hecho** | Tamaño de lente (80–420 pt), tasa de refresco (normal ~3 fps / fluida ~8 fps, aplicada al siguiente tick) y espejo: la lupa se replica en las otras pantallas al punto proporcional del puntero; apagarla reconstruye y devuelve a cada pantalla su snapshot propio. El factor y la forma ya eran configurables. |
 | 4 | **Grabación con efectos de cursor incrustados** | Media | **Hecho** | Los efectos (anillo, spotlight, lupa, ripples, láser) se queman por frame en la grabación de ventana con la misma matriz de anotaciones; la lupa muestra contenido limpio de la ventana, sin anotaciones. La grabación de pantalla ya los mostraba (sus ventanas están en la cinta). |
 | 11 | **Puntero láser** | Alta | **Hecho** | Migrado del banco de ideas. Punto brillante + rastro que se apaga en ~0,7 s; toggle `cursorarrow.rays` en la barra y en Settings → Cursor (color y tamaño 2–14 pt). Quemado en la grabación de ventana por el mismo camino que el resto de los efectos. Codificación resiliente: el decode de `CursorEffects` ya no descarta el blob viejo cuando aparecen campos nuevos. |
 
@@ -74,6 +75,20 @@
 - **Multiventana de grabación**: grabar dos ventanas en paralelo.
 
 ## Registro de decisiones
+
+- **23 oct 2026** — **#3 hecho: lupa configurable.** Tres piezas sobre la
+  infraestructura existente. (1) `zoomSize` ya era persistido pero sin UI —
+  slider 80–420 pt en Settings → Cursor. (2) La cadencia del loop de refresco
+  estaba hardcodeada (320 ms): `LensRefreshRate {normal, responsive}` con
+  intervalos 0,32/0,12 s, releído en cada tick para que el cambio aplique sin
+  re-montar la tarea. (3) Espejo: `lensSourceScreen` en la vista (nil = lupa
+  normal); el loop del cursor le pasa a las demás pantallas el screenshot de
+  la pantalla del puntero y la vista mapea el punto por **posición
+  proporcional** (`mirrorLensPlacement` en el renderer, CG-puro y testeado:
+  identidad en la misma pantalla, mapeo cruzado por tamaños distintos). Al
+  apagar el espejo se reconstruyen las ventanas para que cada pantalla
+  recupere su snapshot de build — el in-place habría dejado contenido ajeno
+  con un mapping extranjero. El toggle solo aparece con >1 pantalla.
 
 - **23 oct 2026** — **Puntero láser hecho** (desde el banco de ideas). La
   `AnnotationTool.laserPointer` que existía dormida en el enum quedó

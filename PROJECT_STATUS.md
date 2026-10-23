@@ -101,8 +101,14 @@ presentaciones, sin congelar el escritorio.
   en la pantalla del cursor. Requiere alguna función de cursor activa —
   es el escenario de sus ventanas.
 - **Foco (spotlight)**: agujero 100–450 + atenuación 0–100%.
-- **Lupa**: contenido **EN VIVO** (~3fps, solo la pantalla del cursor, excluye ventanas propias).
-  Límites: contenido DRM se ve negro; ≤320ms al cambiar de pantalla.
+- **Lupa**: contenido **EN VIVO**, excluye ventanas propias. Tamaño de lente
+  80–420 pt, factor 1–6× y forma círculo/squircle ya configurables; la
+  cadencia de refresco es elegible (normal ~3 fps / fluida ~8 fps, aplica al
+  siguiente tick). Con el espejo activo, las pantallas que no hospedan el
+  puntero muestran la misma lente al punto proporcional (mapeo
+  `mirrorLensPlacement`); apagarlo reconstruye y devuelve el snapshot propio.
+  Límites: contenido DRM se ve negro; ≤320ms (≤1 tick del rate elegido) al
+  cambiar de pantalla.
 - **Puntero láser**: punto brillante (halo + núcleo + fleca blanca, color y
   tamaño 2–14 pt configurables) con cola que se apaga en ~0,7 s. Toggled
   desde la barra (4º efecto) o Settings → Cursor; la cola muestrea cada
@@ -266,7 +272,18 @@ presentaciones, sin congelar el escritorio.
     descarta las preferencias guardadas del usuario. 11 tests nuevos
     (box de trail, decode de blobs viejos, fade-math, píxeles del dot).
 
-`swift build` limpio · `swift test` verde: **140** pruebas Swift Testing (22 suites) +
+24. Lupa configurable: tamaño de lente 80–420 pt (slider nuevo; el campo
+    `zoomSize` ya persistía pero sin UI), tasa de refresco elegible
+    (`LensRefreshRate` normal/fluida con intervalos 0,32/0,12 s releídos por
+    tick) y espejo en múltiples pantallas: `lensSourceScreen` en la vista y
+    mapping proporcional `mirrorLensPlacement` (renderer, CG-puro) — las
+    pantallas sin puntero muestran la misma lente donde corresponde; al
+    apagarlo un rebuild devuelve el snapshot propio de cada pantalla. El
+    toggle solo aparece con más de una pantalla. 5 tests nuevos (defaults +
+    round-trip incl. campos nuevos; identidad, mapeo cruzado y guards del
+    placement).
+
+`swift build` limpio · `swift test` verde: **145** pruebas Swift Testing (22 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
@@ -296,7 +313,9 @@ open build/Overmark.app
 - El autoguardado guarda solo lo dibujado (anotaciones); el undo/redo sigue
   siendo de sesión. Restaurar con otro layout de pantallas funciona por las
   coordenadas globales, pero las anotaciones pueden quedar fuera de vista.
-- Lupa ~3fps y solo la pantalla del cursor (extra pantalla queda con snapshot de entrada).
+- Lupa: el hosting del puntero refresca a la cadencia elegida (~3/~8 fps);
+  las demás pantallas solo reciben snapshot en build (con espejo activo
+  reciben el frame del puntero cada tick, también a esa cadencia).
 - Grabación por ventana: el track se fija al arrancar pero el stream
   reescala el contenido y el burn-in sigue la geometría viva (una ventana
   que cambia de aspecto puede estirarse levemente — medido, no bandas).
