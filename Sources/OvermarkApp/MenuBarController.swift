@@ -23,6 +23,8 @@ public final class MenuBarController {
     public var onRedo: (() -> Void)?
     public var onCopyScreenshot: (() -> Void)?
     public var onSaveScreenshot: (() -> Void)?
+    public var onExportPNG: (() -> Void)?
+    public var onExportPDF: (() -> Void)?
     public var onShowSettings: (() -> Void)?
     public var onQuit: (() -> Void)?
 
@@ -203,6 +205,22 @@ public final class MenuBarController {
         save.target = self
         menu.addItem(save)
 
+        let exportPNG = NSMenuItem(
+            title: L10n.tr("Export PNG…"),
+            action: #selector(handleExportPNG),
+            keyEquivalent: ""
+        )
+        exportPNG.target = self
+        menu.addItem(exportPNG)
+
+        let exportPDF = NSMenuItem(
+            title: L10n.tr("Export PDF…"),
+            action: #selector(handleExportPDF),
+            keyEquivalent: ""
+        )
+        exportPDF.target = self
+        menu.addItem(exportPDF)
+
         menu.addItem(.separator())
 
         let settings = NSMenuItem(
@@ -267,6 +285,14 @@ public final class MenuBarController {
 
     @objc private func handleSaveScreenshot() {
         onSaveScreenshot?()
+    }
+
+    @objc private func handleExportPNG() {
+        onExportPNG?()
+    }
+
+    @objc private func handleExportPDF() {
+        onExportPDF?()
     }
 
     @objc private func handleShowSettings() {

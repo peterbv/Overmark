@@ -7,6 +7,7 @@ import OvermarkHotkeys
 import OvermarkOverlay
 import OvermarkRecorder
 import ScreenCaptureKit
+import UniformTypeIdentifiers
 import SwiftUI
 
 /// The object that owns the app's behaviour.
@@ -1681,6 +1682,60 @@ public final class AppCoordinator: ObservableObject {
 
         CGImageDestinationAddImage(destination, image, nil)
         CGImageDestinationFinalize(destination)
+    }
+
+    /// Exports the composited session (annotations, whiteboard and frozen
+    /// still included) as a PNG the user picks a path for.
+    public func exportPNG() async {
+        await exportSession(as: .png)
+    }
+
+    /// Exports the composited session (annotations, whiteboard and frozen
+    /// still included) as a PDF the user picks a path for.
+    public func exportPDF() async {
+        await exportSession(as: .pdf)
+    }
+
+    private func exportSession(as format: GraphicsExportFormat) async {
+        guard let image = await captureDesktopImage() else {
+            lastError = L10n.tr("Could not capture the screen.")
+            return
+        }
+        guard let data = format.encoded(from: image) else {
+            lastError = L10n.tr("Overmark couldn't encode the export.")
+            return
+        }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [format.contentType]
+        panel.nameFieldStringValue = "Overmark-\(Date.now.formatted(.iso8601.year().month().day()))"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            lastError = L10n.tr("Overmark couldn't save the export.")
+        }
+    }
+}
+
+/// Which file type the session export lands in.
+private enum GraphicsExportFormat {
+    case png
+    case pdf
+
+    var contentType: UTType {
+        switch self {
+        case .png: .png
+        case .pdf: .pdf
+        }
+    }
+
+    func encoded(from image: CGImage) -> Data? {
+        switch self {
+        case .png: GraphicsExport.pngData(from: image)
+        case .pdf: GraphicsExport.pdfData(from: image)
+        }
     }
 }
 

@@ -327,5 +327,11 @@ public enum L10n {
         "Move annotations is on: gestures move instead of drawing. Click the button again to draw.":
             "Mover anotaciones está activo: los gestos mueven en vez de dibujar. Tocá el botón de nuevo para dibujar.",
         "Delete the selected annotations.": "Borrar las anotaciones seleccionadas.",
+
+        // Graphics export.
+        "Export PNG…": "Exportar PNG…",
+        "Export PDF…": "Exportar PDF…",
+        "Overmark couldn't encode the export.": "Overmark no pudo codificar la exportación.",
+        "Overmark couldn't save the export.": "Overmark no pudo guardar la exportación.",
     ]
 }

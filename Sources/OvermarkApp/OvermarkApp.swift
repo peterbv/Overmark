@@ -293,6 +293,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             Task { await self.coordinator.saveScreenshot() }
         }
+        menuBar.onExportPNG = { [weak self] in
+            guard let self else { return }
+            Task { await self.coordinator.exportPNG() }
+        }
+        menuBar.onExportPDF = { [weak self] in
+            guard let self else { return }
+            Task { await self.coordinator.exportPDF() }
+        }
         menuBar.onShowSettings = { [weak self] in
             self?.openSettings()
         }
