@@ -124,6 +124,19 @@ presentaciones, sin congelar el escritorio.
 - Salir (ESC/"Listo"/⌘Q) **finaliza siempre el archivo** — nunca queda corrupto.
   Si la grabación se corta o sale vacía, la barra lo dice en lugar de callar.
 
+### Pizarra dedicada
+- Estado del overlay, **no un modo nuevo**: con la sesión activa, la pizarra
+  con un clic, ☑ del menú o ⌘⇧B cubre las pantallas del scope con un
+  tablero opaco (blanco o negro, tono persistido en Preferencias →
+  Herramientas → Pizarra) y anota encima sin ninguna app debajo.
+- Mientras la pizarra está en pantalla todo clic dibuja (el gate de ⌥ no
+  aplica); **pausar** (⌘⇧S) pliega el lienzo — el desktop vuelve a ser
+  interactivo y al reanudar reaparece; **salir** la apaga para la próxima
+  sesión. Cambiar el tono se aplica al instante, sin reconstruir ventanas.
+- Las capturas multi-monitor componen el relleno del tablero: copiar o
+  guardar muestran la pizarra tal como la vio el público, no el desktop
+  escondido detrás.
+
 ### Extras
 - **Español por defecto**, inglés y automático; cammbio en Preferencias → General → Idioma
   (se persiste). Toda la UI traducida (menú, barra, ajustes, onboarding, editor, errores).
@@ -137,6 +150,7 @@ presentaciones, sin congelar el escritorio.
 | Resaltador / Foco / Lupa | ⌘⇧F / ⌘⇧D / ⌘⇧G |
 | Grabar / detener la grabación | ⌘⇧R |
 | Pausar | ⌘⇧S |
+| Pizarra | ⌘⇧B |
 | Deshacer / Rehacer | ⌘⌥Z / ⌘⌥⇧Z |
 | Copiar / Guardar captura | ⌘⇧C / ⌘⌥⇧S |
 | Salir de Overmark | ⌘⌥Q |
@@ -197,8 +211,13 @@ presentaciones, sin congelar el escritorio.
     apagado vuelve al modo ⌥-dibujar; el chip "captura todo" pasa de
     abrir Settings a alternar directamente. Cambio solo de UI sobre el
     flag persistido (sin tests nuevos, suite intacta).
+19. Pizarra dedicada como estado del overlay (`b39d442`): el canvas pinta
+    el tablero opaco y reclama cada clic; tono blanco/negro persistido
+    (`BoardStyle`), botón en barra + ☑ en menú + ⌘⇧B, pausa pliega el
+    lienzo y el compositor de capturas añade el relleno del tablero
+    (`boardFill` → `backdrop`). 4 tests nuevos del estilo del tablero.
 
-`swift build` limpio · `swift test` verde: **105** pruebas Swift Testing (17 suites) +
+`swift build` limpio · `swift test` verde: **109** pruebas Swift Testing (18 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.

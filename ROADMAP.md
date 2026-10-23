@@ -24,14 +24,17 @@
   la barra; recuperación automática cuando Accesibilidad vuelve.
 - Capturas multi-monitor (copiar / guardar), grabación de ventana en vivo
   (burn-in de anotaciones), DMG firmado ad-hoc.
-- 105 tests (17 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
+- Pizarra dedicada como estado del overlay (sesión activa, ☑ en menú y
+  barra, ⌘⇧B) con tono blanco/negro persistido; pausa pliega el lienzo
+  y las capturas componen el relleno del tablero.
+- 109 tests (18 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
 
 ## 1. Funciones nuevas (mayor valor)
 
 | # | Idea | Prioridad | Estado | Notas |
 |---|---|---|---|---|
 | 1 | **Persistencia de documentos de anotación** | Alta | **Hecho** | Autosave por documento + lista para retomar (pestaña Documentos). Undo/limpiar/borrado por clic derecho intactos. |
-| 2 | **Pizarra dedicada** | Alta | Propuesto | Pantalla blanca completa para anotar sin contenido debajo, además del overlay sobre apps. |
+| 2 | **Pizarra dedicada** | Alta | **Hecho** | Estado del overlay dentro de la sesión (no un modo nuevo): cubre las pantallas del scope con lienzo blanco o negro; botón en barra, ☑ en menú, ⌘⇧B. Pausa muestra el desktop con la pizarra plegada. Copiar/guardar composite el relleno. |
 | 3 | **Lupa configurable** | Media | Propuesto | Limitada: ~3 fps y solo la pantalla del cursor (pantalla extra queda con snapshot de entrada). Ajustar tamaño, zoom, fps; opción de espejo en segunda pantalla. |
 | 4 | **Grabación con efectos de cursor incrustados** | Media | Propuesto | La grabación por ventana quema las anotaciones pero no los efectos dedicados (anillo/ripples/lupa); hacer que vayan dentro del video. |
 
@@ -72,6 +75,17 @@
 
 ## Registro de decisiones
 
+- **22 oct 2026** — **#2 hecho: pizarra dedicada.** Decisión de encaje: no es
+  un `AppMode` nuevo sino **estado del overlay** — el canvas pinta el
+  tablero opaco (blanco/negro, `BoardStyle` persistido en
+  `PreferencesStore`) y reclama cada clic (sin gate ⌥; `hitTest` corto) con
+  el panel reutilizado. Botón `rectangle.inset.filled` en la barra, ítem con
+  checkmark en el menú, atajo ⌘⇧B. Pausa pliega el lienzo (desktop usable
+  sin apagar la pizarra); salir la apaga para la próxima sesión. Las
+  capturas excluyen ventanas propias, así que el compositor añade el
+  relleno del tablero (`boardFill` → `backdrop`): copiar/guardar muestran
+  lo que vio el público. Probe extiende su secuencia con pizarra on/tone
+  switch/pause/resume.
 - **22 oct 2026** — **#5 hecho: botón lápiz de bloqueo.** `EffectButton`
   `pencil.tip` junto a pausa: tintado = lápiz bloqueado (`holdOptionToDraw`
   en `false`, cada clic dibuja sin mantener ⌥); apagado = modo ⌥-dibujar.
