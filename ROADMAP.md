@@ -1,6 +1,6 @@
 # ROADMAP — Overmark
 
-> Hoja de ruta viva. Última actualización: 22 oct 2026.
+> Hoja de ruta viva. Última actualización: 23 oct 2026.
 >
 > El estado y la arquitectura del código viven en `PROJECT_STATUS.md`; este
 > documento registra **futuro**: qué agregar, qué mejorar y por dónde seguir.
@@ -15,7 +15,8 @@
   corrupción).
 - Auto-borrado de trazos dibujados con tiempo configurable.
 - Efectos de cursor: anillo (círculo/squircle/rombo), ripples de clic,
-  spotlight, lupa, zoom — configurables y persistidos.
+  spotlight, lupa, zoom y puntero láser (rastro luminoso) — configurables
+  y persistidos.
 - Colores: paleta integrada + favoritos del usuario (máx. 8) + panel de
   selección; gradiente por anotación; relleno por anotación.
 - Preferencias persistidas (`PreferencesStore`) entre lanzamientos.
@@ -27,7 +28,7 @@
 - Pizarra dedicada como estado del overlay (sesión activa, ☑ en menú y
   barra, ⌘⇧B) con tono blanco/negro persistido; pausa pliega el lienzo
   y las capturas componen el relleno del tablero.
-- 129 tests (21 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
+- 140 tests (22 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
 
 ## 1. Funciones nuevas (mayor valor)
 
@@ -36,7 +37,8 @@
 | 1 | **Persistencia de documentos de anotación** | Alta | **Hecho** | Autosave por documento + lista para retomar (pestaña Documentos). Undo/limpiar/borrado por clic derecho intactos. |
 | 2 | **Pizarra dedicada** | Alta | **Hecho** | Estado del overlay dentro de la sesión (no un modo nuevo): cubre las pantallas del scope con lienzo blanco o negro; botón en barra, ☑ en menú, ⌘⇧B. Pausa muestra el desktop con la pizarra plegada. Copiar/guardar composite el relleno. |
 | 3 | **Lupa configurable** | Media | Propuesto | Limitada: ~3 fps y solo la pantalla del cursor (pantalla extra queda con snapshot de entrada). Ajustar tamaño, zoom, fps; opción de espejo en segunda pantalla. |
-| 4 | **Grabación con efectos de cursor incrustados** | Media | **Hecho** | Los efectos (anillo, spotlight, lupa, ripples) se queman por frame en la grabación de ventana con la misma matriz de anotaciones; la lupa muestra contenido limpio de la ventana, sin anotaciones. La grabación de pantalla ya los mostraba (sus ventanas están en la cinta). |
+| 4 | **Grabación con efectos de cursor incrustados** | Media | **Hecho** | Los efectos (anillo, spotlight, lupa, ripples, láser) se queman por frame en la grabación de ventana con la misma matriz de anotaciones; la lupa muestra contenido limpio de la ventana, sin anotaciones. La grabación de pantalla ya los mostraba (sus ventanas están en la cinta). |
+| 11 | **Puntero láser** | Alta | **Hecho** | Migrado del banco de ideas. Punto brillante + rastro que se apaga en ~0,7 s; toggle `cursorarrow.rays` en la barra y en Settings → Cursor (color y tamaño 2–14 pt). Quemado en la grabación de ventana por el mismo camino que el resto de los efectos. Codificación resiliente: el decode de `CursorEffects` ya no descarta el blob viejo cuando aparecen campos nuevos. |
 
 ## 2. Mejoras rápidas (una sesión cada una)
 
@@ -58,8 +60,6 @@
 
 - **Congelar pantalla**: pausa en frame estático para anotar encima sin que
   el fondo se mueva.
-- **Puntero láser**: seguimiento del cursor con rastro luminoso (combo
-  natural con la infraestructura actual de efectos).
 - **Mover/recolorear anotaciones existentes**: selección por marquee para
   arrastrar, cambiar color o borrar lo ya dibujado (hoy: borrar clic
   derecho y undo).
@@ -74,6 +74,24 @@
 - **Multiventana de grabación**: grabar dos ventanas en paralelo.
 
 ## Registro de decisiones
+
+- **23 oct 2026** — **Puntero láser hecho** (desde el banco de ideas). La
+  `AnnotationTool.laserPointer` que existía dormida en el enum quedó
+  descartada como encaje: un láser es transitorio y no pertenece al
+  documento de anotaciones — sobre si entra más adelante como sello
+  persistente. En su lugar: **efecto de cursor** (`CursorEffects` +
+  `isLaserEnabled/laserColor/laserRadius`), reusando la infraestructura
+  completa de la ronda #4: las ventanas de efecto lo dibujan con
+  `CursorEffectRenderer.drawLaserDot/drawLaserTrail` (halo + núcleo + fleca
+  blanca; la cola se apaga en ~0,7 s con un ticker de 30 fps mientras el
+  cursor está quieto) y la grabación por ventana lo quema con la misma
+  matriz, orden z: dim → lupa → anillo → láser → ripples. El box del
+  recorder muestrea la cola en cada `updateCursor` (prune 0,75 s, tope 64).
+  Cambio estructural de regalo: `CursorEffects` pasó de Codable sintético a
+  `init(from:)` tolerante (`decodeIfPresent` en todos los campos) — las
+  preferencias guardadas ya no se descartan cuando se agrega un campo
+  (el mismo dolor que motivó la preferencia separada en #6). Toggle en la
+  barra (`cursorarrow.rays`, 4º efecto) y en Settings → Cursor.
 
 - **22 oct 2026** — **#4 hecho: grabación de ventana quema los efectos de
   cursor.** Hallazgo al reabrir el ítem: la grabación de pantalla ya

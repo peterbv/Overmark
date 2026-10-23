@@ -103,6 +103,10 @@ presentaciones, sin congelar el escritorio.
 - **Foco (spotlight)**: agujero 100–450 + atenuación 0–100%.
 - **Lupa**: contenido **EN VIVO** (~3fps, solo la pantalla del cursor, excluye ventanas propias).
   Límites: contenido DRM se ve negro; ≤320ms al cambiar de pantalla.
+- **Puntero láser**: punto brillante (halo + núcleo + fleca blanca, color y
+  tamaño 2–14 pt configurables) con cola que se apaga en ~0,7 s. Toggled
+  desde la barra (4º efecto) o Settings → Cursor; la cola muestrea cada
+  movimiento y se apaga con un ticker propio cuando el cursor se detiene.
 
 ### Grabación de la presentación
 - **⌘⇧R** o el botón rojo de la barra: graba la presentación completa con
@@ -124,8 +128,9 @@ presentaciones, sin congelar el escritorio.
   lee la geometría viva de cada frame (`SCStreamFrameInfo`:
   `ScreenRect`/`ContentRect`, autocarlibrados contra la geometría del
   arranque) — las anotaciones siguen pegadas a la ventana aunque la muevan
-  o la redimensionen. Los efectos dedicados (spotlight/desenfoque/laser)
-  no quedan dibujados en este modo. Un track realmente variable exigiría
+  o la redimensionen. Los efectos dedicados (anillo/spotlight/lupa/láser/
+  ripples) también se queman por frame en este modo (ver ítems 22 y 23).
+  Un track realmente variable exigiría
   `SCRecordingOutput` (macOS 15), que no entrega frames por callback y
   con ello ciega el burn-in — descartado en favor del track fijo escalado.
 - Salir (ESC/"Listo"/⌘Q) **finaliza siempre el archivo** — nunca queda corrupto.
@@ -249,7 +254,19 @@ presentaciones, sin congelar el escritorio.
     mostraba los efectos (ventanas en cinta); 15 tests nuevos de box,
     formas, spotlight por píxel, ripple-math y recorte de lupa.
 
-`swift build` limpio · `swift test` verde: **129** pruebas Swift Testing (21 suites) +
+23. Puntero láser (del banco de ideas): punto brillante con cola que se
+    apaga en ~0,7 s. Descartado el encaje de `AnnotationTool.laserPointer`
+    (dormido en el enum): un láser es transitorio y no pertenece al
+    documento. En su lugar, efecto de cursor completo: renderer
+    (`drawLaserDot`/`drawLaserTrail`), muestreo de la cola en el box del
+    recorder (prune 0,75 s, tope 64), burn en la grabación de ventana con
+    la misma matriz, toggle en la barra (4º botón de efectos) y Settings.
+    Cambio estructural: el `decode` de `CursorEffects` es tolerante
+    (`decodeIfPresent` en todos los campos) — agregar un campo ya no
+    descarta las preferencias guardadas del usuario. 11 tests nuevos
+    (box de trail, decode de blobs viejos, fade-math, píxeles del dot).
+
+`swift build` limpio · `swift test` verde: **140** pruebas Swift Testing (22 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
