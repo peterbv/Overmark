@@ -33,7 +33,10 @@ presentaciones, sin congelar el escritorio.
   - **Grabación por ventana viva**: el track se adopta al arrancar pero el
     stream reescala el contenido en ambas direcciones y el burn-in sigue la
     geometría viva por frame — mover o redimensionar la ventana grabada ya
-    no desplaza las anotaciones ni deja bandas de recorte.
+    no desplaza las anotaciones ni deja bandas de recorte. Los efectos de
+    cursor (anillo, spotlight, lupa, ripples) también se queman por frame
+    con la misma matriz; la lupa muestra el contenido limpio de la ventana
+    (snapshot previo a las anotaciones).
   - **Renombre Presentify → Overmark** (todo el repo, módulos y bundle id).
     Motivo: Presentify es un producto comercial existente (7 años, App Store,
     Setapp, Homebrew) con el nombre y dominio ocupados; Overmark está libre
@@ -236,7 +239,17 @@ presentaciones, sin congelar el escritorio.
     chip de la barra muestra el símbolo real. Preferencia separada
     (`Overmark.drawingModifier`) para no perturbar el blob de ToolSettings.
 
-`swift build` limpio · `swift test` verde: **114** pruebas Swift Testing (19 suites) +
+22. Efectos de cursor dentro de la grabación de ventana: el dibujo de los
+    efectos vive ahora en `CursorEffectRenderer` (Capture, CG-puro) — la
+    ventana on-screen delega en él y el recorder lo llama por frame con la
+    misma matriz de anotaciones, tras un snapshot *limpio* (la lupa muestra
+    la ventana sin anotaciones). Nuevo box thread-safe `CursorEffectFrame`
+    recepciona settings/puntero/clics; el spotlight quema con clip even-odd
+    (el blend `.clear` habría ennegrecido el buffer opaco). Display ya
+    mostraba los efectos (ventanas en cinta); 15 tests nuevos de box,
+    formas, spotlight por píxel, ripple-math y recorte de lupa.
+
+`swift build` limpio · `swift test` verde: **129** pruebas Swift Testing (21 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
@@ -267,10 +280,11 @@ open build/Overmark.app
   siendo de sesión. Restaurar con otro layout de pantallas funciona por las
   coordenadas globales, pero las anotaciones pueden quedar fuera de vista.
 - Lupa ~3fps y solo la pantalla del cursor (extra pantalla queda con snapshot de entrada).
-- Grabación por ventana: no incluye los efectos dedicados; el track se fija
-  al arrancar pero el stream reescala el contenido y el burn-in sigue la
-  geometría viva (una ventana que cambia de aspecto puede estirarse
-  levemente — medido, no bandas).
+- Grabación por ventana: el track se fija al arrancar pero el stream
+  reescala el contenido y el burn-in sigue la geometría viva (una ventana
+  que cambia de aspecto puede estirarse levemente — medido, no bandas).
+  El rastro del cursor exige Accesibilidad (con/Acc) — sin ella, los
+  efectos exigibles al puntero (lupa/anillo/hueco) no se queman ese frame.
 - Escena `Settings` de SwiftUI muerta (se usa ventana propia) — código vivo pero residual.
 
 ## Si lo subimos a GitHub (checklist para cuando toque)

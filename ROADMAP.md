@@ -23,11 +23,11 @@
   server), **Pausa** (⌘⇧S), **captura total** — todos visibles por chips en
   la barra; recuperación automática cuando Accesibilidad vuelve.
 - Capturas multi-monitor (copiar / guardar), grabación de ventana en vivo
-  (burn-in de anotaciones), DMG firmado ad-hoc.
+  (burn-in de anotaciones + efectos de cursor), DMG firmado ad-hoc.
 - Pizarra dedicada como estado del overlay (sesión activa, ☑ en menú y
   barra, ⌘⇧B) con tono blanco/negro persistido; pausa pliega el lienzo
   y las capturas componen el relleno del tablero.
-- 109 tests (18 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
+- 129 tests (21 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
 
 ## 1. Funciones nuevas (mayor valor)
 
@@ -36,7 +36,7 @@
 | 1 | **Persistencia de documentos de anotación** | Alta | **Hecho** | Autosave por documento + lista para retomar (pestaña Documentos). Undo/limpiar/borrado por clic derecho intactos. |
 | 2 | **Pizarra dedicada** | Alta | **Hecho** | Estado del overlay dentro de la sesión (no un modo nuevo): cubre las pantallas del scope con lienzo blanco o negro; botón en barra, ☑ en menú, ⌘⇧B. Pausa muestra el desktop con la pizarra plegada. Copiar/guardar composite el relleno. |
 | 3 | **Lupa configurable** | Media | Propuesto | Limitada: ~3 fps y solo la pantalla del cursor (pantalla extra queda con snapshot de entrada). Ajustar tamaño, zoom, fps; opción de espejo en segunda pantalla. |
-| 4 | **Grabación con efectos de cursor incrustados** | Media | Propuesto | La grabación por ventana quema las anotaciones pero no los efectos dedicados (anillo/ripples/lupa); hacer que vayan dentro del video. |
+| 4 | **Grabación con efectos de cursor incrustados** | Media | **Hecho** | Los efectos (anillo, spotlight, lupa, ripples) se queman por frame en la grabación de ventana con la misma matriz de anotaciones; la lupa muestra contenido limpio de la ventana, sin anotaciones. La grabación de pantalla ya los mostraba (sus ventanas están en la cinta). |
 
 ## 2. Mejoras rápidas (una sesión cada una)
 
@@ -74,6 +74,22 @@
 - **Multiventana de grabación**: grabar dos ventanas en paralelo.
 
 ## Registro de decisiones
+
+- **22 oct 2026** — **#4 hecho: grabación de ventana quema los efectos de
+  cursor.** Hallazgo al reabrir el ítem: la grabación de pantalla ya
+  incluye los efectos (sus ventanas de efecto están en la cinta; solo el
+  chrome se excluye), así que el delta real era la grabación por ventana.
+  Nueva pieza Core (`CursorEffectFrame`: settings + puntero + clics en un
+  snapshot thread-safe, espejo del box de anotaciones) y un renderer
+  CG-puro en Capture (`CursorEffectRenderer`) donde VIVE el dibujo de los
+  efectos: la ventana on-screen delega en él y el recorder lo llama con la
+  misma matriz que anotaciones, en espacio AppKit — el video muestra los
+  efectos exactamente donde flotan. Lupa: se quema un snapshot *limpio*
+  del buffer (antes de pintar anotaciones), igual que la lupa en pantalla
+  excluye las ventanas overlay de su captura. El spotlight quema con clip
+  even-odd (el blend `.clear` de la ventana transparente habría ennegrecido
+  el buffer opaco). Ripples solo si hay clics registrados; el cursor exige
+  Accesibilidad, igual que en pantalla. Sin settings ni UI nueva.
 
 - **22 oct 2026** — **#6 hecho: tecla de dibujo configurable.** El ⌥ fijo
   deja de estar hardcodeado: `DrawingModifier` (⌥/⌃/⌘, nuevo enum Core con
