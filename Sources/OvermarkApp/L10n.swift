@@ -45,6 +45,16 @@ public enum L10n {
         return spanish[key] ?? key
     }
 
+    /// A pluralized annotation count for document rows and the autosave line.
+    public static func annotationCount(_ count: Int) -> String {
+        switch effective {
+        case .spanish:
+            count == 1 ? "1 anotación" : "\(count) anotaciones"
+        default:
+            count == 1 ? "1 annotation" : "\(count) annotations"
+        }
+    }
+
     /// The Spanish copy, keyed by the English string.
     private static let spanish: [String: String] = [
         // Menu bar.
@@ -254,5 +264,23 @@ public enum L10n {
         "Reopen Overmark or check System Settings → Displays if this persists.": "Vuelve a abrir Overmark o revisa Ajustes del Sistema → Pantallas si continúa.",
         "Could not capture the screen:": "No se pudo capturar la pantalla:",
         "Could not capture the screen.": "No se pudo capturar la pantalla.",
+
+        // Documents.
+        "Documents": "Documentos",
+        "Current session": "Sesión actual",
+        "Everything you draw is kept in an autosave and comes back when you open Overmark again.":
+            "Todo lo que dibujas queda en un autoguardado y reaparece la próxima vez que abras Overmark.",
+        "Autosave": "Autoguardado",
+        "The canvas is empty.": "El lienzo está vacío.",
+        "Save Session…": "Guardar sesión…",
+        "Save the current session": "Guardar la sesión actual",
+        "Give the document a name; you will be able to restore it later from this list.":
+            "Ponle nombre al documento; luego podrás recuperarlo desde esta lista.",
+        "Session": "Sesión",
+        "Saved documents": "Documentos guardados",
+        "Nothing saved yet.": "Todavía no hay nada guardado.",
+        "Restore": "Restaurar",
+        "Delete": "Eliminar",
+        "1 annotation": "1 anotación",
     ]
 }

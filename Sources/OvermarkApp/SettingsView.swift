@@ -15,6 +15,7 @@ enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
     case tools
     case cursor
     case general
+    case documents
     case shortcuts
     case permissions
 
@@ -26,6 +27,7 @@ enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
         case .tools: L10n.tr("Tools")
         case .cursor: L10n.tr("Cursor")
         case .general: L10n.tr("General")
+        case .documents: L10n.tr("Documents")
         case .shortcuts: L10n.tr("Shortcuts")
         case .permissions: L10n.tr("Permissions")
         }
@@ -66,6 +68,7 @@ struct SettingsView: View {
         case .tools: toolSettings
         case .cursor: cursorSettings
         case .general: generalSettings
+        case .documents: documentsSettings
         case .shortcuts: HotKeysSettingsView(coordinator: coordinator)
         case .permissions: permissionSettings
         }
@@ -508,6 +511,98 @@ struct SettingsView: View {
         case .english: "English"
         case .spanish: "Español"
         }
+    }
+
+    // MARK: - Documents
+
+    private var documentsSettings: some View {
+        Form {
+            Section(L10n.tr("Current session")) {
+                Text(L10n.tr("Everything you draw is kept in an autosave and comes back when you open Overmark again."))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack {
+                    Text(L10n.tr("Autosave"))
+                    Spacer()
+                    if coordinator.document.annotations.isEmpty {
+                        Text(L10n.tr("The canvas is empty."))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(L10n.annotationCount(coordinator.document.annotations.count))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Button(L10n.tr("Save Session…")) { presentSaveSessionDialog() }
+                    .disabled(coordinator.document.annotations.isEmpty)
+            }
+
+            Section(L10n.tr("Saved documents")) {
+                if coordinator.savedDocuments.isEmpty {
+                    Text(L10n.tr("Nothing saved yet."))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(coordinator.savedDocuments) { entry in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(entry.name)
+                                Text(metaLine(for: entry))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Button(L10n.tr("Restore")) {
+                                coordinator.restoreSavedDocument(entry)
+                            }
+                            .buttonStyle(.borderless)
+
+                            Button(role: .destructive) {
+                                coordinator.deleteSavedDocument(entry)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { coordinator.reloadSavedDocuments() }
+    }
+
+    /// One line of metadata under each saved document name.
+    private func metaLine(for entry: SessionArchive.Entry) -> String {
+        let date = entry.snapshot.savedAt.formatted(date: .abbreviated, time: .shortened)
+        let count = L10n.annotationCount(entry.snapshot.annotations.count)
+        return "\(date) · \(count)"
+    }
+
+    /// Asks for a document name and hands it to the coordinator.
+    private func presentSaveSessionDialog() {
+        let alert = NSAlert()
+        alert.messageText = L10n.tr("Save the current session")
+        alert.informativeText = L10n.tr("Give the document a name; you will be able to restore it later from this list.")
+        alert.addButton(withTitle: L10n.tr("Save"))
+        alert.addButton(withTitle: L10n.tr("Cancel"))
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.stringValue = defaultDocumentName()
+        alert.accessoryView = field
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            coordinator.saveAnnotationDocument(named: field.stringValue)
+        }
+    }
+
+    /// A fresh, human-readable name: "Session 22 oct 2026, 10:35".
+    private func defaultDocumentName() -> String {
+        L10n.tr("Session") + " " + Date.now.formatted(date: .abbreviated, time: .shortened)
     }
 
     // MARK: - Permissions

@@ -30,8 +30,15 @@ public final class AppCoordinator: ObservableObject {
             // now; keep its snapshot in step with every document change.
             recordingAnnotations.set(document.annotations)
             syncStepNumber()
+            scheduleAutosave()
         }
     }
+
+    /// Documents saved to the archive, newest first.
+    @Published public private(set) var savedDocuments: [SessionArchive.Entry] = []
+
+    /// Debounced autosave; cancelled and rescheduled as the document churns.
+    private var autosaveTask: Task<Void, Never>?
 
     /// The selected tool, colour and width.
     ///
@@ -262,6 +269,10 @@ public final class AppCoordinator: ObservableObject {
         recorderSettings = Self.storedRecorderSettings()
         presentationScope = Self.storedPresentationScope()
 
+        // Bring back whatever the previous session was annotating on, so a
+        // relaunch never drops the user's work without a trace.
+        restoreAutosavedDocument()
+
         // Display changes (plug, unplug, rearrange) must keep an active
         // session honest: the overlays follow whatever ends up attached.
         screensObserver = NotificationCenter.default.addObserver(
@@ -289,6 +300,9 @@ public final class AppCoordinator: ObservableObject {
 
     /// Stops all ongoing activity.
     public func stop() {
+        // A quit must not lose the tail of the session: flush now rather
+        // than wait out the autosave debounce.
+        persistAutosave()
         cursorTracker.stop()
         hotKeys.unregisterAll()
         hotKeys.unregisterEscape()
@@ -313,6 +327,97 @@ public final class AppCoordinator: ObservableObject {
         mode = .idle
         // A recording still being finalized keeps running on its own task;
         // `applicationWillTerminate` awaits it via `quit(afterStopping:)`.
+    }
+
+    // MARK: - Documents
+
+    /// Restores what the previous session was annotating on.
+    private func restoreAutosavedDocument() {
+        let snapshot = SessionArchive.loadAutosave()
+        savedDocuments = SessionArchive.listSnapshots()
+        guard let snapshot, !snapshot.annotations.isEmpty else { return }
+        document = AnnotationDocument(annotations: snapshot.annotations)
+        // The content is already on disk; skip the debounced rewrite.
+        autosaveTask?.cancel()
+        autosaveTask = nil
+    }
+
+    /// Publishes a debounced autosave of the current document.
+    ///
+    /// Drawing floods `document` with changes; the delay collapses each
+    /// burst into one final write, and an empty document clears the slot
+    /// right away so a cleaned canvas does not resurrect stale strokes.
+    private func scheduleAutosave() {
+        autosaveTask?.cancel()
+        guard !document.isEmpty else {
+            persistAutosave()
+            return
+        }
+        autosaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            self?.persistAutosave()
+        }
+    }
+
+    /// Writes the autosave slot synchronously. Main actor only.
+    private func persistAutosave() {
+        autosaveTask?.cancel()
+        autosaveTask = nil
+        let snapshot = SessionSnapshot(
+            screens: screenFrames(),
+            annotations: document.annotations
+        )
+        try? SessionArchive.autosaveSnapshot(snapshot)
+    }
+
+    /// Captures the current display layout as global AppKit frames.
+    private func screenFrames() -> [ScreenFrame] {
+        NSScreen.screens.map { screen in
+            ScreenFrame(
+                origin: Point(
+                    x: screen.frame.origin.x,
+                    y: screen.frame.origin.y
+                ),
+                size: Size(
+                    width: screen.frame.width,
+                    height: screen.frame.height
+                ),
+                scale: screen.backingScaleFactor
+            )
+        }
+    }
+
+    /// Saves the current document to the archive under a name and refreshes
+    /// the list.
+    public func saveAnnotationDocument(named name: String) {
+        let snapshot = SessionSnapshot(
+            screens: screenFrames(),
+            annotations: document.annotations
+        )
+        _ = try? SessionArchive.saveSnapshot(snapshot, name: name)
+        reloadSavedDocuments()
+    }
+
+    /// Puts a saved document back on the canvas.
+    public func restoreSavedDocument(_ entry: SessionArchive.Entry) {
+        document = AnnotationDocument(annotations: entry.snapshot.annotations)
+        // The step counter follows the restored annotations.
+        syncStepNumber()
+        // The restored content is not an autosave of itself; skip the write.
+        autosaveTask?.cancel()
+        autosaveTask = nil
+    }
+
+    /// Removes a document from the archive and refreshes the list.
+    public func deleteSavedDocument(_ entry: SessionArchive.Entry) {
+        try? SessionArchive.deleteSnapshot(named: entry.name)
+        reloadSavedDocuments()
+    }
+
+    /// Rebuilds the saved-documents list from disk.
+    public func reloadSavedDocuments() {
+        savedDocuments = SessionArchive.listSnapshots()
     }
 
     // MARK: - Permissions
@@ -399,6 +504,9 @@ public final class AppCoordinator: ObservableObject {
 
     /// Leaves annotation mode and removes the overlays.
     public func exitAnnotationMode() {
+        // The session ends here; whatever is drawn gets captured on disk
+        // right away instead of waiting for the autosave debounce.
+        persistAutosave()
         toolbar?.hide()
         hotKeys.unregisterEscape()
         overlay.tearDown()
