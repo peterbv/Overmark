@@ -29,7 +29,10 @@
 - Pizarra dedicada como estado del overlay (sesión activa, ☑ en menú y
   barra, ⌘⇧B) con tono blanco/negro persistido; pausa pliega el lienzo
   y las capturas componen el relleno del tablero.
-- 145 tests (22 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
+- Congelar pantalla como estado del overlay (still de las pantallas del
+  scope detrás de las anotaciones, ☑ en menú y barra, ⌘⇧P); excluyente
+  con la pizarra, pausa pliega el still y las capturas lo componen.
+- 148 tests (22 suites Swift Testing) + 24 XCTest — verdes en cada cambio.
 
 ## 1. Funciones nuevas (mayor valor)
 
@@ -40,6 +43,7 @@
 | 3 | **Lupa configurable** | Media | **Hecho** | Tamaño de lente (80–420 pt), tasa de refresco (normal ~3 fps / fluida ~8 fps, aplicada al siguiente tick) y espejo: la lupa se replica en las otras pantallas al punto proporcional del puntero; apagarla reconstruye y devuelve a cada pantalla su snapshot propio. El factor y la forma ya eran configurables. |
 | 4 | **Grabación con efectos de cursor incrustados** | Media | **Hecho** | Los efectos (anillo, spotlight, lupa, ripples, láser) se queman por frame en la grabación de ventana con la misma matriz de anotaciones; la lupa muestra contenido limpio de la ventana, sin anotaciones. La grabación de pantalla ya los mostraba (sus ventanas están en la cinta). |
 | 11 | **Puntero láser** | Alta | **Hecho** | Migrado del banco de ideas. Punto brillante + rastro que se apaga en ~0,7 s; toggle `cursorarrow.rays` en la barra y en Settings → Cursor (color y tamaño 2–14 pt). Quemado en la grabación de ventana por el mismo camino que el resto de los efectos. Codificación resiliente: el decode de `CursorEffects` ya no descarta el blob viejo cuando aparecen campos nuevos. |
+| 12 | **Congelar pantalla** | Media | **Hecho** | Migrado del banco de ideas. Estado del overlay (hermano de la pizarra): captura una vez cada pantalla del scope (sin ventanas propias) y las canvases pintan ese still detrás de las anotaciones — el fondo queda quieto mientras las apps de abajo siguen corriendo. Botón `snowflake` en la barra, ☑ en menú, ⌘⇧P. Excluyente con la pizarra en ambos sentidos; pausa pliega el still; capturas componen el frame congelado; salir de la sesión lo suelta. |
 
 ## 2. Mejoras rápidas (una sesión cada una)
 
@@ -59,8 +63,6 @@
 
 ## 4. Banco de ideas (sin compromiso, a evaluar)
 
-- **Congelar pantalla**: pausa en frame estático para anotar encima sin que
-  el fondo se mueva.
 - **Mover/recolorear anotaciones existentes**: selección por marquee para
   arrastrar, cambiar color o borrar lo ya dibujado (hoy: borrar clic
   derecho y undo).
@@ -99,6 +101,27 @@
   apagar el espejo se reconstruyen las ventanas para que cada pantalla
   recupere su snapshot de build — el in-place habría dejado contenido ajeno
   con un mapping extranjero. El toggle solo aparece con >1 pantalla.
+
+- **23 oct 2026** — **Congelar pantalla hecho** (desde el banco de ideas).
+  Encaje elegido: **estado del overlay hermano de la pizarra**, no un modo
+  nuevo — `backdropImage` en el canvas (no toca `AnnotationTool`, cuyo
+  `blur/spotlight/laserPointer` dormido recuerda que las herramientas
+  "modeladas por futuro" no son el camino), dibujado después del relleno
+  del tablero y antes del renderer: tabla `context.draw(image, in:
+  bounds)` sobre el contexto y-up (igual que el resto del repo dibuja
+  imágenes CG: upright sin flip). El coordinator captura cada pantalla del
+  scope UNA vez con el `ScreenCaptureService` ya usado por capturas y lupa
+  (excluye ventanas propias) y guarda el diccionario per-display: overlay
+  y compositor comparten los frames. Excluyente con la pizarra en ambos
+  sentidos (una pantalla no es lienzo y still a la vez); pausa pliega el
+  still por `setFreezeVisible` al lado de `setBoardVisible`; las capturas
+  copian/guardan compositando el frame congelado (`frozen:`/`frozenFill:`
+  en el compositor, con precedencia sobre `backdrop:`). Salir de la sesión
+  y quitar la pieza resets. En el probe las capturas quedan honestas sobre
+  el grant TCC fresco del binario (`[PROBE] freeze: active=...`): sin
+  re-grant, `SCShareableContent` no responde y el still no se activa — el
+  canvas/compositor/passthrough quedan verificados por tests de pixel y
+  por el mismo camino de pizarra. Hotkey **⌘⇧P**.
 
 - **23 oct 2026** — **Puntero láser hecho** (desde el banco de ideas). La
   `AnnotationTool.laserPointer` que existía dormida en el enum quedó

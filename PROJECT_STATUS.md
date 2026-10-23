@@ -155,6 +155,18 @@ presentaciones, sin congelar el escritorio.
   guardar muestran la pizarra tal como la vio el público, no el desktop
   escondido detrás.
 
+### Congelar pantalla
+- Otro estado del overlay, hermano de la pizarra (sesión activa, botón
+  `snowflake` de la barra, ☑ del menú o ⌘⇧P): se captura **una vez** cada
+  pantalla del scope — excluyendo las ventanas propias — y las canvases
+  pintan ese still detrás de las anotaciones: el fondo queda quieto para
+  anotar encima mientras las apps de abajo siguen corriendo.
+- Excluyente con la pizarra en ambos sentidos (elegir uno suelta el otro);
+  **pausar** pliega el still como pliega el lienzo; **salir** lo suelta.
+- Las capturas componen el frame congelado (`frozen:` en el compositor,
+  con precedencia sobre el relleno): copiar y guardar muestran el still
+  tal como lo vio el público, con las anotaciones encima.
+
 ### Extras
 - **Español por defecto**, inglés y automático; cammbio en Preferencias → General → Idioma
   (se persiste). Toda la UI traducida (menú, barra, ajustes, onboarding, editor, errores).
@@ -169,6 +181,7 @@ presentaciones, sin congelar el escritorio.
 | Grabar / detener la grabación | ⌘⇧R |
 | Pausar | ⌘⇧S |
 | Pizarra | ⌘⇧B |
+| Congelar pantalla | ⌘⇧P |
 | Deshacer / Rehacer | ⌘⌥Z / ⌘⌥⇧Z |
 | Copiar / Guardar captura | ⌘⇧C / ⌘⌥⇧S |
 | Salir de Overmark | ⌘⌥Q |
@@ -293,7 +306,20 @@ presentaciones, sin congelar el escritorio.
     íntegra dentro de las pantallas al plegarse y un clamp de
     visibilidad completa cubre rearrangements de displays.
 
-`swift build` limpio · `swift test` verde: **145** pruebas Swift Testing (22 suites) +
+26. Congelar pantalla (desde el banco de ideas): estado del overlay
+    hermano de la pizarra — el canvas gana `backdropImage` (dibujado
+    después del relleno del tablero, antes del renderer) y el
+    coordinator captura una vez por display con el `ScreenCaptureService`
+    (sin ventanas propias) para repartir stills por display. Excluyente
+    con la pizarra en ambos sentidos; pausa pliega el still
+    (`setFreezeVisible`); captura/captura+guardar compositan el frame
+    congelado (`composited(frozen:)` + `desktopImage(frozenFill:)`).
+    Botón `snowflake` en la barra, ☑ del menú, ⌘⇧P; el probe reporta si
+    el grant TCC fresco del binario falta. 3 tests nuevos de compositing
+    (el still reemplaza la captura, gana sobre el relleno, no-op sin
+    frozen).
+
+`swift build` limpio · `swift test` verde: **148** pruebas Swift Testing (22 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
