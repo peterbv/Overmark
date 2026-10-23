@@ -39,7 +39,7 @@
 
 | # | Idea | Prioridad | Estado | Notas |
 |---|---|---|---|---|
-| 5 | **Botón lápiz en la barra** | Alta | Propuesto | Toggle de modo dibujo con un clic, alternativa a mantener ⌥. |
+| 5 | **Botón lápiz en la barra** | Alta | **Hecho** | Botón `pencil.tip` junto a pausa: bloquea el lápiz (cada clic dibuja, sin ⌥) / vuelve a requerir ⌥. El chip "captura todo" también alterna con un tap. |
 | 6 | **Tecla modificadora configurable** | Media | Propuesto | Elegir ⌥ / ⌃ / ⌘ en vez del ⌥ fijo. |
 | 7 | **Auto-borrado para formas y texto** | Media | Propuesto | El desvanecimiento hoy solo aplica a trazos dibujados; extender a rectángulos, elipses, flechas y números. |
 
@@ -72,6 +72,12 @@
 
 ## Registro de decisiones
 
+- **22 oct 2026** — **#5 hecho: botón lápiz de bloqueo.** `EffectButton`
+  `pencil.tip` junto a pausa: tintado = lápiz bloqueado (`holdOptionToDraw`
+  en `false`, cada clic dibuja sin mantener ⌥); apagado = modo ⌥-dibujar.
+  Reusa el flag ya persistido de Tools (el `didSet` de settings re-aplica el
+  overlay en vivo) — sin lógica nueva ni tests extra. El chip "captura todo"
+  también alterna en el tap: vuelve a requerir ⌥ en vez de abrir Settings.
 - **22 oct 2026** — **#1 hecho: persistencia de documentos.** Nuevo
   `SessionArchive` en el núcleo (`SessionSnapshot` v1 = anotaciones + layout
   de pantallas + fecha; directorio `Application Support/Overmark/Documents`)

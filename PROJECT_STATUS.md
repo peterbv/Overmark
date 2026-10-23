@@ -77,6 +77,9 @@ presentaciones, sin congelar el escritorio.
   paleta + grosor, deshacer/rehacer/limpiar, 3 efectos, selector de pantallas,
   botón de grabación (rojo con cronómetro mientras graba; "terminando" deshabilitado;
   chip verde "Grabación guardada" que abre Finder al terminar), pausa, engranaje, "Listo".
+- **Lápiz de bloqueo** (`pencil.tip`, junto a pausa): un clic alterna entre
+  dibujar con cada clic (sin mantener ⌥) y el modo ⌥-dibujar; el chip "captura
+  todo" también alterna con un tap.
 - El ítem del menú de la barra tiene la misma pantalla de anotación como submenú
   con marcas de verificación (disponible estando en modo anotación).
 - **Arrastrable** por la banda de la parte superior y con **snap magnético a las 4 esquinas**.
@@ -189,6 +192,11 @@ presentaciones, sin congelar el escritorio.
     al terminar la app, borrado si el lienzo queda vacío) y restauración
     al arrancar; pestaña **Documentos** en Preferencias con guardar con
     nombre, restaurar y eliminar; 10 tests nuevos del archivo de sesión.
+18. Botón lápiz de bloqueo en la barra (`pencil.tip` junto a pausa):
+    alterna `holdOptionToDraw` — tintado dibuja con cada clic sin ⌥,
+    apagado vuelve al modo ⌥-dibujar; el chip "captura todo" pasa de
+    abrir Settings a alternar directamente. Cambio solo de UI sobre el
+    flag persistido (sin tests nuevos, suite intacta).
 
 `swift build` limpio · `swift test` verde: **105** pruebas Swift Testing (17 suites) +
 **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
