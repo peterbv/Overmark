@@ -89,7 +89,13 @@ presentaciones, sin congelar el escritorio.
   tecla-dibujar; el chip "captura todo" también alterna con un tap.
 - El ítem del menú de la barra tiene la misma pantalla de anotación como submenú
   con marcas de verificación (disponible estando en modo anotación).
-- **Arrastrable** por la banda de la parte superior y con **snap magnético a las 4 esquinas**.
+- **Anclable (dock)** en Arriba / Abajo / Izquierda / Derecha
+  (Settings → General, persistido y aplicado en vivo). La pestañita de
+  auto-ocultar vive en el **slot del dock** (borde de pantalla): ya no
+  deriva con cada plegado; desplegar restaura la barra exactamente en el
+  dock y el arrastre quedó libre (regreso al dock, sin snap a esquinas;
+  orientación vertical de dos columnas pendiente).
+- **Arrastrable** por la banda de la parte superior (clamp de visibilidad).
 - **Auto-ocultar** (esta es la entrada): se colapsa a una pestaña al soltar el cursor,
   reaparece al pasar por encima o arrastrar la pestaña.
 - Botón **?** → panel flotante de atajos de teclado (es/no según idioma).
@@ -193,6 +199,19 @@ presentaciones, sin congelar el escritorio.
   el resto de la app.
 - Sin hotkeys esta ronda (paridad con Save Screenshot); el GIF animado
   quedará en el banco por peso técnico (SCStream→GIF).
+
+### Dock de la barra flotante
+- Settings → General: **Anclaje de la barra** (Arriba / Abajo / Izquierda /
+  Derecha), preferencia `Overmark.toolbarDock`, aplicado en vivo
+  (`reapplyDock` incluye el desplazamiento de la pestañita).
+- La pestañita de auto-ocultar se ancla al **slot del dock** (borde de
+  pantalla, 48×12): su posición ya no depende de dónde estuvo la barra, y
+  `showExpanded` reconstruye la barra desde ese mismo punto — round-trip
+  sin deriva.
+- Arrastre libre: se retiró el snap magnético a esquinas (el dock es el
+  único imán); sigue el clamp de visibilidad de las pantallas.
+- Pruebas nuevas en Core (`ToolbarDockTests`, 5) sobre enum, flags de
+  orientación y persistencia con fallback ante blob corrupto.
 
 ### Extras
 - **Español por defecto**, inglés y automático; cambio en Preferencias → General → Idioma
@@ -364,8 +383,17 @@ presentaciones, sin congelar el escritorio.
     tests nuevos (firma y round-trip del PNG, header `%PDF` y una sola
     página vía PDFKit).
 
-`swift build` limpio · `swift test` verde: **158** pruebas Swift Testing (23 suites, incluida
-"Graphics export") + **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
+29. Dock de la barra flotante (pedido del owner): la pestañita de
+    auto-ocultar derivaba porque quedaba pegada al borde de la *barra*
+    (que cambia con cada arrastre). Ahora la barra se ancla donde el
+    owner elija (Arriba/Abajo/Izquierda/Derecha, preferencia
+    `Overmark.toolbarDock`, aplicada en vivo) y la pestañita vive en el
+    slot del dock sobre el borde de la pantalla; desplegar reconstruye
+    la barra desde ese punto exacto. Arrastre libre sin snap; 5 tests
+    de Core sumados (`ToolbarDockTests`).
+
+`swift build` limpio · `swift test` verde: **163** pruebas Swift Testing (24 suites, incluida
+"Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
 
