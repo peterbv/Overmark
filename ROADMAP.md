@@ -40,6 +40,9 @@
 - Barra flotante anclable (Settings → General): Arriba / Abajo / Izquierda /
   Derecha, persistido; la pestañita de recuperación se queda fija en el slot
   del dock y desplegar vuelve exactamente a él (arrastre libre, sin snap).
+- Barra flotante vertical: en los docks laterales la misma barra se arma en
+  dos columnas (herramientas/control | efectos/estilo con paleta en grilla),
+  reconstruida en vivo al alternar la orientación del dock.
 - 163 tests (24 suites Swift Testing, incluida "Toolbar dock") + 24
   XCTest — verdes en cada cambio.
 
@@ -55,7 +58,8 @@
 | 12 | **Congelar pantalla** | Media | **Hecho** | Migrado del banco de ideas. Estado del overlay (hermano de la pizarra): captura una vez cada pantalla del scope (sin ventanas propias) y las canvases pintan ese still detrás de las anotaciones — el fondo queda quieto mientras las apps de abajo siguen corriendo. Botón `snowflake` en la barra, ☑ en menú, ⌘⇧P. Excluyente con la pizarra en ambos sentidos; pausa pliega el still; capturas componen el frame congelado; salir de la sesión lo suelta. |
 | 13 | **Mover y recolorear anotaciones (marquee)** | Media | **Hecho** | Migrado del banco de ideas. Botón de selección en la barra: marquee por intersección de límites; arrastrar una selección la mueve con clamp a la pantalla; la paleta recolorea la selección (color sólido, limpia gradiente); la basura borra lo seleccionado (si no hay selección limpia todo). Un solo undo por gesto (batch `update`/`remove(id:)`). Pasa a dibujar (elegir herramienta) limpia la selección. |
 | 14 | **Exportar PNG/PDF de la sesión** | Media | **Hecho** | Migrado del banco de ideas. Ítems "Export PNG…/Export PDF…" en el menú (al lado de Save Screenshot…): el compositor ya produce la imagen final (anotaciones + pizarra + freeze) y `GraphicsExport` (CG-puro, testeado) la envuelve en PNG (ImageIO) o PDF de una página (CGPDFContext, página blanca para que los visores no pinten alpha como negro). NSSavePanel con nombre `Overmark-fecha`; sin hotkeys esta ronda. GIF animado sigue en el banco por peso (SCStream→GIF). |
-| 15 | **Dock de la barra flotante** | Alta (pedido del owner) | **Hecho** | Settings → General: anclar la barra Arriba / Abajo / Izquierda / Derecha (persistido, aplicado en vivo vía `reapplyDock`). La pestañita de recuperación se ancla SIEMPRE al slot del dock (borde de pantalla, 48×12) — deja de derivar con cada plegado (causa raíz: pegarla al borde de la barra, que cambia con el arrastre). Desplegar vuelve exactamente al dock; el arrastre quedó libre (sin snap a esquinas) y el dock es el único imán. Orientación vertical de dos columnas sigue en el banco. |
+| 15 | **Dock de la barra flotante** | Alta (pedido del owner) | **Hecho** | Settings → General: anclar la barra Arriba / Abajo / Izquierda / Derecha (persistido, aplicado en vivo vía `reapplyDock`). La pestañita de recuperación se ancla SIEMPRE al slot del dock (borde de pantalla, 48×12) — deja de derivar con cada plegado (causa raíz: pegarla al borde de la barra, que cambia con el arrastre). Desplegar vuelve exactamente al dock; el arrastre quedó libre (sin snap a esquinas) y el dock es el único imán. Orientación vertical de dos columnas hecha en #16. |
+| 16 | **Barra flotante vertical** | Alta (pedido del owner) | **Hecho** | En los docks laterales la barra se arma en dos columnas (~240×700): herramientas + undo/trash + pausa/ayuda/preferencias/pin + Listo en la primera; efectos, alcance, grabación, lápiz/pizarra/congelar/marquee, paleta en grilla, slider vertical y chips en la segunda. `reapplyDock` reconstruye el contenido al alternar orientación; el handle pasa a una tira vertical en el borde interno; el drag libre y el re-use de estilos se mantienen. |
 
 ## 2. Mejoras rápidas (una sesión cada una)
 
@@ -99,8 +103,21 @@
   la *barra*, que cambia con cada arrastre). (3) `showExpanded` vuelve al
   dock exacto y `reapplyDock()` aplica el cambio de anclaje en vivo
   (pestañita incluida). (4) El arrastre quedó libre: se eliminó el snap a
-  esquinas (el dock es el único imán). Aún horizontal: la orientación
-  vertical de dos columnas queda en el banco para la ronda siguiente.
+  esquinas (el dock es el único imán). La orientación vertical de dos
+  columnas se hizo en #16.
+
+- **23 oct 2026** — **#16 hecho: barra flotante vertical** (segunda parte del
+  pedido del owner: "modo horizontal y vertical para acomodarlo en los
+  lados"). Piezas: (1) `verticalBarSize` (240×700) + `contentIsVertical` en
+  el controller — `dockRect` usa el tamaño según `ToolbarDock.isHorizontal`.
+  (2) `AnnotationToolbarView.isVertical` reparte en dos columnas
+  (herramientas/control | efectos/estilo) reutilizando los mismos botones y
+  helps; `ColorPalette` ganó `layout` (`.grid` con 3 columnas para la
+  barra vertical, `.row` intacto en Settings). (3) Slider vertical via
+  rotation. (4) `reapplyDock()` reconstruye el contentView al alternar
+  orientación en vivo. (5) `makeExpandedContent` perdió el param vestigial
+  `handleFrame` y el handle se convierte en tira vertical (12×80) en el
+  borde interno con dock lateral.
 
 - **23 oct 2026** — **#14 hecho: exportar PNG/PDF de la sesión.** Piezas: (1)
   `GraphicsExport` en Capture, CG-puro y testeado — `pngData` (ImageIO

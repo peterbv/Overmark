@@ -93,8 +93,9 @@ presentaciones, sin congelar el escritorio.
   (Settings → General, persistido y aplicado en vivo). La pestañita de
   auto-ocultar vive en el **slot del dock** (borde de pantalla): ya no
   deriva con cada plegado; desplegar restaura la barra exactamente en el
-  dock y el arrastre quedó libre (regreso al dock, sin snap a esquinas;
-  orientación vertical de dos columnas pendiente).
+  mismo punto. **Horizontal o vertical**: en los docks laterales la barra
+  se arma en dos columnas (misma funcionalidad, ~240×700), reconstruidas
+  en vivo al alternar la orientación.
 - **Arrastrable** por la banda de la parte superior (clamp de visibilidad).
 - **Auto-ocultar** (esta es la entrada): se colapsa a una pestaña al soltar el cursor,
   reaparece al pasar por encima o arrastrar la pestaña.
@@ -212,6 +213,19 @@ presentaciones, sin congelar el escritorio.
   único imán); sigue el clamp de visibilidad de las pantallas.
 - Pruebas nuevas en Core (`ToolbarDockTests`, 5) sobre enum, flags de
   orientación y persistencia con fallback ante blob corrupto.
+
+### Barra flotante vertical
+- En los docks Izquierda / Derecha la barra se arma en dos columnas
+  (~240×700): herramientas + undo/trash + pausa/ayuda/preferencias/pin +
+  **Listo** en la primera; efectos, alcance de pantallas, grabación,
+  lápiz/pizarra/congelar/marquee, paleta en grilla (3 columnas), slider
+  vertical (rotado) y chips en la segunda.
+- `reapplyDock()` reconstruye el contenido al alternar entre orientaciones
+  en vivo (Arriba⇄Izquierda etc.); los docks horizontales conservan el
+  layout de filas original sin cambios.
+- El handle de arrastre pasa a una tira vertical (12×80) en el borde interno
+  cuando el dock es lateral; el arrastre libre con regreso al dock sigue
+  igual. Tests y helps reutilizan los mismos strings es/en.
 
 ### Extras
 - **Español por defecto**, inglés y automático; cambio en Preferencias → General → Idioma
@@ -391,6 +405,14 @@ presentaciones, sin congelar el escritorio.
     slot del dock sobre el borde de la pantalla; desplegar reconstruye
     la barra desde ese punto exacto. Arrastre libre sin snap; 5 tests
     de Core sumados (`ToolbarDockTests`).
+30. Barra flotante vertical (pedido del owner): con dock Izquierda o
+    Derecha la barra se arma en dos columnas (~240×700) reutilizando los
+    mismos botones/helps — herramientas/control a la izquierda de
+    VerticalDivider, efectos + alcance + grabación + paleta en grilla y
+    slider rotado a la derecha. `reapplyDock` reconstruye el contenido al
+    alternar orientación en vivo y el handle pasa a tira vertical interna
+    (12×80). Sin tests nuevos (ronda UI, convención previa); probe agrega
+    paso `.leading` que ejercita el contenido vertical.
 
 `swift build` limpio · `swift test` verde: **163** pruebas Swift Testing (24 suites, incluida
 "Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
