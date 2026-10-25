@@ -714,6 +714,13 @@ public final class AppCoordinator: ObservableObject {
         isSelectionMode.toggle()
     }
 
+    /// Flips the floating toolbar between the minimized (essentials only)
+    /// and the full layout. The toolbar owns the state; this exposed for
+    /// the probe and any future menu entry.
+    public func toggleToolbarMinimized() {
+        toolbar?.toggleMinimized()
+    }
+
     /// Applies edits (moves, recolors) to specific annotations as one undo
     /// step.
     public func applyAnnotationEdits(_ edits: [Annotation]) {

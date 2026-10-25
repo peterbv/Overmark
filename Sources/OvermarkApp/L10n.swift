@@ -343,5 +343,9 @@ public enum L10n {
         "Dock on the right edge": "Lado derecho",
         "The bar starts on the chosen edge; grab it to drag it anywhere, and when it folds its little tab always waits in this dock.":
             "La barra arranca en el lado elegido; agarrala para arrastrarla a donde quieras y, cuando se pliega, su pestañita siempre espera en este anclaje.",
+
+        // Toolbar minimization.
+        "Show all controls": "Mostrar todas las funciones",
+        "Show only the essentials": "Mostrar solo lo esencial",
     ]
 }

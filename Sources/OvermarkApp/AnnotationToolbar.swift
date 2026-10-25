@@ -18,6 +18,12 @@ final class AnnotationToolbarController {
     /// The vertical layout the side docks present: two slim columns
     /// instead of two full-width rows.
     private static let verticalBarSize = NSSize(width: 240, height: 700)
+    /// The minimized layouts: only the essentials (tools, history,
+    /// pause, the expansion toggle and Done), one row or one column. The
+    /// defaults that keep the bar out of the way until everything is
+    /// needed.
+    private static let compactBarSize = NSSize(width: 580, height: 60)
+    private static let compactVerticalBarSize = NSSize(width: 84, height: 540)
 
     private let coordinator: AppCoordinator
     private var panel: OverlayPanel?
@@ -37,6 +43,9 @@ final class AnnotationToolbarController {
     /// change flips a horizontal dock to a side one, and the content
     /// must be rebuilt at the same time the panel gets its new frame.
     private var contentIsVertical = false
+    /// Minimized (essentials only) vs full: starts minimized so the bar
+    /// stays easy to manage; the chevron re-flows it in place.
+    private var isMinimizedMode = true
 
     init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
@@ -152,7 +161,12 @@ final class AnnotationToolbarController {
     /// (sides).
     private func dockRect(for screen: NSScreen) -> NSRect {
         let horizontal = coordinator.toolbarDock.isHorizontal
-        let size = horizontal ? Self.barSize : Self.verticalBarSize
+        let size: NSSize
+        if isMinimizedMode {
+            size = horizontal ? Self.compactBarSize : Self.compactVerticalBarSize
+        } else {
+            size = horizontal ? Self.barSize : Self.verticalBarSize
+        }
         let frame = screen.frame
         let menuBarHeight = max(frame.height - screen.visibleFrame.height, 0)
         let margin: CGFloat = 12
@@ -246,7 +260,7 @@ final class AnnotationToolbarController {
     /// rows on top/bottom docks, two slim columns on side docks.
     private func makeExpandedContent() -> NSView {
         let vertical = !coordinator.toolbarDock.isHorizontal
-        let hosting = self.hosting(isVertical: vertical)
+        let hosting = self.hosting(isVertical: vertical, isMinimized: isMinimizedMode)
         contentIsVertical = vertical
 
         let hover = HoverPassThruView(frame: .zero)
@@ -290,16 +304,32 @@ final class AnnotationToolbarController {
         return hosting
     }
 
-    private func hosting(isVertical: Bool) -> NSHostingView<AnnotationToolbarView> {
+    private func hosting(
+        isVertical: Bool,
+        isMinimized: Bool
+    ) -> NSHostingView<AnnotationToolbarView> {
         NSHostingView(
             rootView: AnnotationToolbarView(
                 coordinator: coordinator,
                 isVertical: isVertical,
+                isMinimized: isMinimized,
                 isAutoHideEnabled: isAutoHide,
                 onToggleAutoHide: { [weak self] in self?.toggleAutoHide() },
+                onToggleMinimized: { [weak self] in self?.toggleMinimized() },
                 onShowShortcuts: { [weak self] in self?.toggleShortcutsWindow() }
             )
         )
+    }
+
+    /// Compact-by-default toggle: rebuilding the only-expanded content
+    /// and re-anchoring it on the dock rect so the resize reads as a
+    /// re-flow instead of a jump.
+    func toggleMinimized() {
+        guard let panel else { return }
+        isMinimizedMode.toggle()
+        guard isExpanded, let screen = dockingScreen(for: panel.frame) else { return }
+        panel.contentView = makeExpandedContent()
+        panel.setFrame(dockRect(for: screen), display: true, animate: true)
     }
 
     private func handleHoverEnter() {
@@ -329,8 +359,10 @@ final class AnnotationToolbarController {
         hosting.rootView = AnnotationToolbarView(
             coordinator: coordinator,
             isVertical: contentIsVertical,
+            isMinimized: isMinimizedMode,
             isAutoHideEnabled: isAutoHide,
             onToggleAutoHide: { [weak self] in self?.toggleAutoHide() },
+            onToggleMinimized: { [weak self] in self?.toggleMinimized() },
             onShowShortcuts: { [weak self] in self?.toggleShortcutsWindow() }
         )
     }
@@ -428,13 +460,23 @@ struct AnnotationToolbarView: View {
     /// Side docks (leading/trailing) show a two-column layout instead of
     /// the two-row horizontal bar.
     var isVertical: Bool = false
+    /// Minimized mode: only the essentials stay visible; the chevron
+    /// re-flows the bar to the full (or vertical) layout.
+    var isMinimized: Bool = false
     var isAutoHideEnabled: Bool = false
     var onToggleAutoHide: () -> Void = {}
+    var onToggleMinimized: () -> Void = {}
     var onShowShortcuts: () -> Void = {}
 
     var body: some View {
         Group {
-            if isVertical {
+            if isMinimized {
+                if isVertical {
+                    minimalVerticalLayout
+                } else {
+                    minimalHorizontalLayout
+                }
+            } else if isVertical {
                 verticalLayout
             } else {
                 horizontalLayout
@@ -460,6 +502,130 @@ struct AnnotationToolbarView: View {
         VStack(spacing: 8) {
             mainRow
             styleRow
+        }
+    }
+
+    /// Minimized horizontal bar: the essentials in one slim row — draw,
+    /// fix (undo/redo/trash), pause and finish; the chevron brings the
+    /// rest back.
+    private var minimalHorizontalLayout: some View {
+        HStack(spacing: 6) {
+            ForEach(Self.renderableTools, id: \.self) { tool in
+                ToolButton(
+                    systemImage: Self.toolSymbols[tool] ?? "pencil",
+                    isSelected: coordinator.settings.tool == tool
+                ) {
+                    if coordinator.isSelectionMode {
+                        coordinator.isSelectionMode = false
+                    }
+                    coordinator.settings.tool = tool
+                }
+            }
+
+            Divider()
+                .frame(height: 22)
+
+            historyControls
+
+            Divider()
+                .frame(height: 22)
+
+            AnnotationControlButton(
+                systemImage: coordinator.mode == .paused ? "play.fill" : "pause.fill"
+            ) {
+                coordinator.togglePause()
+            }
+
+            expansionToggle
+
+            finishButton
+        }
+    }
+
+    /// Minimized vertical bar: the essentials in one slim column.
+    private var minimalVerticalLayout: some View {
+        VStack(spacing: 6) {
+            ForEach(Self.renderableTools, id: \.self) { tool in
+                ToolButton(
+                    systemImage: Self.toolSymbols[tool] ?? "pencil",
+                    isSelected: coordinator.settings.tool == tool
+                ) {
+                    if coordinator.isSelectionMode {
+                        coordinator.isSelectionMode = false
+                    }
+                    coordinator.settings.tool = tool
+                }
+            }
+
+            Divider()
+                .frame(height: 1)
+
+            historyControls
+
+            Divider()
+                .frame(height: 1)
+
+            AnnotationControlButton(
+                systemImage: coordinator.mode == .paused ? "play.fill" : "pause.fill"
+            ) {
+                coordinator.togglePause()
+            }
+
+            expansionToggle
+
+            Spacer(minLength: 0)
+
+            finishButton
+        }
+    }
+
+    /// Undo, redo and trash: shared verbatim by every layout.
+    @ViewBuilder
+    private var historyControls: some View {
+        AnnotationControlButton(
+            systemImage: "arrow.uturn.backward",
+            isEnabled: coordinator.document.canUndo
+        ) {
+            coordinator.undo()
+        }
+        AnnotationControlButton(
+            systemImage: "arrow.uturn.forward",
+            isEnabled: coordinator.document.canRedo
+        ) {
+            coordinator.redo()
+        }
+        AnnotationControlButton(
+            systemImage: "trash",
+            isEnabled: !coordinator.document.annotations.isEmpty
+                || !coordinator.selectionIDs.isEmpty,
+            help: L10n.tr(
+                coordinator.selectionIDs.isEmpty
+                    ? "Clear the canvas"
+                    : "Delete the selected annotations."
+            )
+        ) {
+            if coordinator.selectionIDs.isEmpty {
+                coordinator.clearAll()
+            } else {
+                coordinator.deleteSelection()
+            }
+        }
+    }
+
+    /// The minimized/full switch. Shared by all four layouts: it sits
+    /// next to Done so the compact bar and the full bar swap with one
+    /// click in the same corner.
+    private var expansionToggle: some View {
+        EffectButton(
+            systemImage: isMinimized ? "chevron.up.2" : "chevron.down.2",
+            isSelected: false,
+            help: L10n.tr(
+                isMinimized
+                    ? "Show all controls"
+                    : "Show only the essentials"
+            )
+        ) {
+            onToggleMinimized()
         }
     }
 
@@ -536,6 +702,11 @@ struct AnnotationToolbarView: View {
                 ) {
                     onToggleAutoHide()
                 }
+
+                // Minimized keeps only this column's essence: the same
+                // chevron that restores the second column here re-flows
+                // the bar to one slim column.
+                expansionToggle
 
                 Spacer(minLength: 0)
 
@@ -843,6 +1014,10 @@ struct AnnotationToolbarView: View {
             ) {
                 onToggleAutoHide()
             }
+
+            // Same chevron the compact bar carries: one click re-flows
+            // this row down to the essentials.
+            expansionToggle
 
             finishButton
         }

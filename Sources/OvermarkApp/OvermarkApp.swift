@@ -231,6 +231,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 400_000_000)
             step("toolbar re-docked top")
 
+            // The minimized mode: the bar already opens this way by
+            // default, so the first flip expands it in place and the
+            // second one returns it to the essentials.
+            coordinator.toggleToolbarMinimized()
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            step("toolbar expanded in place")
+            coordinator.toggleToolbarMinimized()
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            step("toolbar minimized again (default)")
+
             // The configurable lens exercises the in-place update path:
             // resizing, then the quick refresh cadence, then mirroring (a
             // toggle the refresh loop starts pushing to other displays on
