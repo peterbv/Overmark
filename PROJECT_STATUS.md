@@ -238,6 +238,20 @@ presentaciones, sin congelar el escritorio.
 - Sin preferencia persistida: es estado del controller (`isMinimizedMode`,
   expuesto como `toggleToolbarMinimized()` para el probe).
 
+### Firma y distribución (infra lista)
+- `Scripts/build-app.sh` autodetecta un certificado **Developer ID Application**
+  en el llavero y firma con él; sin cert sigue ad-hoc con requisito
+  estable (`designated => identifier "com.overmark.app"`) que mantiene
+  los permisos TCC entre rebuilds. `OVERMARK_SIGN_IDENTITY="-"` fuerza
+  ad-hoc (CI); `--sign` fija una identidad concreta.
+- Notarización opcional del DMG: `--notary-profile` (o env
+  `OVERMARK_NOTARY_PROFILE`) encadena `notarytool submit --wait` +
+  `stapler staple` tras firmar con `--options runtime --timestamp`.
+- Guía completa en `Support/DISTRIBUTION.md` (compra del cert,
+  `store-credentials`, flujo y verificación `spctl`/`stapler validate`).
+  Pendiente solo el Developer ID del owner; el resto del pipeline ya está
+  verificado end-to-end ad-hoc.
+
 ### Extras
 - **Español por defecto**, inglés y automático; cambio en Preferencias → General → Idioma
   (se persiste). Toda la UI traducida (menú, barra, ajustes, onboarding, editor, errores).
@@ -433,6 +447,15 @@ presentaciones, sin congelar el escritorio.
     probe). Estado del controller, sin preferencia ni tests nuevos; probe
     expande y minimiza en vivo tras el restore del dock.
 
+32. Firma Developer ID — infra lista a la espera del cert: autodetección
+    del primer "Developer ID Application" del llavero en `build-app.sh`
+    (fallback ad-hoc con requisito estable, `OVERMARK_SIGN_IDENTITY="-"`
+    para CI), notarización opcional del DMG (`--notary-profile` →
+    `notarytool submit --wait` + `stapler staple`) y guía nueva
+    `Support/DISTRIBUTION.md`. Verificado end-to-end ad-hoc (firma válida,
+    DR satisfecho, DMG emitido); sin cambios en código Swift — métricas
+    intactas.
+
 `swift build` limpio · `swift test` verde: **163** pruebas Swift Testing (24 suites, incluida
 "Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
@@ -442,7 +465,7 @@ ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 
 ```bash
 swift build && swift test
-bash Scripts/build-app.sh          # → build/Overmark.app + build/Overmark.dmg (firma ad-hoc)
+bash Scripts/build-app.sh          # → build/Overmark.app + build/Overmark.dmg (Developer ID automático si existe; ad-hoc sin él)
 open build/Overmark.app
 ```
 

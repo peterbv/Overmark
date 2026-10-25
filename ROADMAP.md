@@ -77,7 +77,7 @@
 
 | # | Idea | Prioridad | Estado | Notas |
 |---|---|---|---|---|
-| 8 | **Firma Developer ID real** | Alta (si distribuimos) | Propuesto | Elimina el re-grant de permisos TCC en cada compilación (dolor conocido: cdhash ad-hoc cambia → Accesibilidad/Captura se vuelven a pedir). Bloqueante para distribuir el DMG. |
+| 8 | **Firma Developer ID real** | Alta (si distribuimos) | **Hecho (infra)** | Pipeline listo con cert ausente: `build-app.sh` autodetecta el primer "Developer ID Application" del llavero (_OVERRIDE ad-hoc con `OVERMARK_SIGN_IDENTITY="-"`), notarización opcional (`--notary-profile` / `OVERMARK_NOTARY_PROFILE` → `notarytool submit --wait` + `stapler staple` al DMG) y guía completa en `Support/DISTRIBUTION.md`. El requisito ad-hoc estable (`designated => identifier`, keys TCC) sigue para builds sin cert. Falta únicamente comprar el Developer ID. |
 | 9 | **Limpiar Settings residual de SwiftUI** | Baja | Propuesto | La escena `Settings` quedó muerta (se usa ventana propia); código vivo pero residual. |
 | 10 | **Checklist GitHub** | Media (al publicar) | Propuesto | CI (Actions en runner macOS), releases con DMG verificable (`codesign --verify --deep`), README bilingüe con GIFs, LICENSE (¿MIT?), `git remote` + proteger main, Sparkle si hay usuarios reales. |
 
@@ -95,6 +95,22 @@
 - **Multiventana de grabación**: grabar dos ventanas en paralelo.
 
 ## Registro de decisiones
+
+- **25 oct 2026** — **#8 hecho (infra): firma Developer ID + notarización
+  listas, a la espera del certificado** (el llavero del owner aún no tiene
+  identidades; decisión: dejar el pipeline terminado y documentado). Piezas:
+  (1) `build-app.sh` autodetecta el primer "Developer ID Application" del
+  llavero y firma con él; ad-hoc queda como fallback (y el env
+  `OVERMARK_SIGN_IDENTITY="-"` lo fuerza, útil en CI). (2) `--notary-profile` / env
+  `OVERMARK_NOTARY_PROFILE` encadenan `notarytool submit --wait` +
+  `stapler staple` sobre el DMG ya firmado y verificado (release con
+  `--options runtime --timestamp`). (3) `Support/DISTRIBUTION.md`: guía
+  bilingüe — compra del cert, `store-credentials`, flujo completo y
+  verificación (`spctl`/`stapler validate`). (4) El requisito ad-hoc
+  estable (`designated => identifier "com.overmark.app"`) queda intocado
+  para builds sin firma — el fix del re-grant TCC sigue salvando el modo
+  local. Verificado end-to-end ad-hoc: firma válida, DR satisfecho, DMG
+  emitido.
 
 - **25 oct 2026** — **#17 hecho: modo minimizado de la barra** (idea del
   owner: "un modo minimizado con las funciones más útiles y poder expandir
