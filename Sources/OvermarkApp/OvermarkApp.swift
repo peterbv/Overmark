@@ -214,6 +214,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             coordinator.toolbarDock = .trailing
             try? await Task.sleep(nanoseconds: 400_000_000)
             step("toolbar re-docked trailing")
+
+            // The leading dock is the one vertical orientation: it makes the
+            // live toolbar rebuild into two columns exercising the vertical
+            // layout without restarting the session.
+            coordinator.toolbarDock = .leading
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            step("toolbar re-docked leading (vertical bar)")
             coordinator.toolbarDock = .bottom
             try? await Task.sleep(nanoseconds: 400_000_000)
             step("toolbar re-docked bottom")

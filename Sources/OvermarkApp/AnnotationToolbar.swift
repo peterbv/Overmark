@@ -15,6 +15,9 @@ import SwiftUI
 @MainActor
 final class AnnotationToolbarController {
     private static let barSize = NSSize(width: 760, height: 104)
+    /// The vertical layout the side docks present: two slim columns
+    /// instead of two full-width rows.
+    private static let verticalBarSize = NSSize(width: 240, height: 700)
 
     private let coordinator: AppCoordinator
     private var panel: OverlayPanel?
@@ -30,6 +33,10 @@ final class AnnotationToolbarController {
     /// Settings change re-docks a live bar through `reapplyDock()`.
     private var autoCollapseTask: Task<Void, Never>?
     private var shortcutsWindow: HelpPanel?
+    /// The orientation the expanded content was built for; a Settings
+    /// change flips a horizontal dock to a side one, and the content
+    /// must be rebuilt at the same time the panel gets its new frame.
+    private var contentIsVertical = false
 
     init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
@@ -50,9 +57,7 @@ final class AnnotationToolbarController {
         // hits still take precedence over the window-move gesture.
         panel.isMovableByWindowBackground = true
         isExpanded = true
-        panel.contentView = makeExpandedContent(
-            handleFrame: NSRect(x: rect.width / 2 - 40, y: rect.height - 16, width: 80, height: 12)
-        )
+        panel.contentView = makeExpandedContent()
         panel.orderFrontRegardless()
 
         self.panel = panel
@@ -120,6 +125,16 @@ final class AnnotationToolbarController {
     func reapplyDock() {
         guard let panel else { return }
         guard let screen = dockingScreen(for: panel.frame) else { return }
+
+        // A horizontal dock and a side dock show different layouts: when
+        // the expanded bar changes orientation, rebuild the content
+        // before (or instead of) just moving the panel.
+        let wantsVertical = !coordinator.toolbarDock.isHorizontal
+        if isExpanded, contentIsVertical != wantsVertical {
+            contentIsVertical = wantsVertical
+            panel.contentView = makeExpandedContent()
+        }
+
         let target = isExpanded ? dockRect(for: screen) : tabSlot(for: screen)
         panel.setFrame(target, display: true, animate: true)
     }
@@ -136,7 +151,8 @@ final class AnnotationToolbarController {
     /// of the menu bar (top), the Dock (bottom) and the screen edges
     /// (sides).
     private func dockRect(for screen: NSScreen) -> NSRect {
-        let size = Self.barSize
+        let horizontal = coordinator.toolbarDock.isHorizontal
+        let size = horizontal ? Self.barSize : Self.verticalBarSize
         let frame = screen.frame
         let menuBarHeight = max(frame.height - screen.visibleFrame.height, 0)
         let margin: CGFloat = 12
@@ -158,14 +174,22 @@ final class AnnotationToolbarController {
         case .leading:
             return NSRect(
                 x: frame.minX + margin,
-                y: frame.minY + (frame.height - size.height) / 2,
+                // A tall bar on a short display could outgrow the visible
+                // area: clamp it inside the visible frame.
+                y: max(
+                    screen.visibleFrame.minY + margin,
+                    frame.minY + (frame.height - size.height) / 2
+                ),
                 width: size.width,
                 height: size.height
             )
         case .trailing:
             return NSRect(
                 x: frame.maxX - size.width - margin,
-                y: frame.minY + (frame.height - size.height) / 2,
+                y: max(
+                    screen.visibleFrame.minY + margin,
+                    frame.minY + (frame.height - size.height) / 2
+                ),
                 width: size.width,
                 height: size.height
             )
@@ -218,9 +242,12 @@ final class AnnotationToolbarController {
     // MARK: Auto-hide docking
 
     /// Rebuilds the expanded HUD: SwiftUI controls + a hover-tracking
-    /// view + the drag handle.
-    private func makeExpandedContent(handleFrame: NSRect) -> NSView {
-        let hosting = self.hosting(for: handleFrame)
+    /// view + the drag handle. The layout follows the dock: horizontal
+    /// rows on top/bottom docks, two slim columns on side docks.
+    private func makeExpandedContent() -> NSView {
+        let vertical = !coordinator.toolbarDock.isHorizontal
+        let hosting = self.hosting(isVertical: vertical)
+        contentIsVertical = vertical
 
         let hover = HoverPassThruView(frame: .zero)
         hover.onEnter = { [weak self] in self?.handleHoverEnter() }
@@ -228,27 +255,46 @@ final class AnnotationToolbarController {
         hover.autoresizingMask = [.width, .height]
         hosting.addSubview(hover)
 
-        let handle = DragHandleView(frame: NSRect(
-            x: hosting.bounds.width / 2 - 40,
-            y: hosting.bounds.height - 16,
-            width: 80,
-            height: 12
-        ))
+        // Horizontal bars get the grip strip on their top edge; vertical
+        // bars get a tall strip on the screen-facing inner edge.
+        let handleFrame: NSRect
+        let handleMask: NSView.AutoresizingMask
+        if vertical {
+            let onRightEdge = coordinator.toolbarDock == .leading
+            handleFrame = NSRect(
+                x: onRightEdge ? hosting.bounds.width - 16 : 4,
+                y: hosting.bounds.height / 2 - 40,
+                width: 12,
+                height: 80
+            )
+            handleMask = onRightEdge ? [.minXMargin] : [.maxXMargin]
+        } else {
+            handleFrame = NSRect(
+                x: hosting.bounds.width / 2 - 40,
+                y: hosting.bounds.height - 16,
+                width: 80,
+                height: 12
+            )
+            handleMask = [.minXMargin, .maxXMargin, .minYMargin]
+        }
+
+        let handle = DragHandleView(frame: handleFrame)
         handle.toolTip = L10n.tr("Drag here to move the toolbar")
         handle.onMouseEnter = { [weak self] in self?.handleHoverEnter() }
         handle.onMouseExit = { [weak self] in self?.handleHoverExit() }
-        // Centered strip pinned to the top edge when the panel changes
-        // size.
-        handle.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin]
+        // Pinned to the screen-facing edge; sizing margins only so an
+        // edge pass keeps the strip hugging that side.
+        handle.autoresizingMask = handleMask
         hosting.addSubview(handle)
 
         return hosting
     }
 
-    private func hosting(for handleFrame: NSRect) -> NSHostingView<AnnotationToolbarView> {
+    private func hosting(isVertical: Bool) -> NSHostingView<AnnotationToolbarView> {
         NSHostingView(
             rootView: AnnotationToolbarView(
                 coordinator: coordinator,
+                isVertical: isVertical,
                 isAutoHideEnabled: isAutoHide,
                 onToggleAutoHide: { [weak self] in self?.toggleAutoHide() },
                 onShowShortcuts: { [weak self] in self?.toggleShortcutsWindow() }
@@ -282,6 +328,7 @@ final class AnnotationToolbarController {
               let hosting = panel.contentView as? NSHostingView<AnnotationToolbarView> else { return }
         hosting.rootView = AnnotationToolbarView(
             coordinator: coordinator,
+            isVertical: contentIsVertical,
             isAutoHideEnabled: isAutoHide,
             onToggleAutoHide: { [weak self] in self?.toggleAutoHide() },
             onShowShortcuts: { [weak self] in self?.toggleShortcutsWindow() }
@@ -320,14 +367,7 @@ final class AnnotationToolbarController {
         guard let screen = dockingScreen(for: panel.frame) else { return }
         let target = dockRect(for: screen)
 
-        panel.contentView = makeExpandedContent(
-            handleFrame: NSRect(
-                x: target.width / 2 - 40,
-                y: target.height - 16,
-                width: 80,
-                height: 12
-            )
-        )
+        panel.contentView = makeExpandedContent()
         panel.setFrame(target, display: true, animate: false)
     }
 
@@ -385,14 +425,20 @@ struct AnnotationToolbarView: View {
     ]
 
     @ObservedObject var coordinator: AppCoordinator
+    /// Side docks (leading/trailing) show a two-column layout instead of
+    /// the two-row horizontal bar.
+    var isVertical: Bool = false
     var isAutoHideEnabled: Bool = false
     var onToggleAutoHide: () -> Void = {}
     var onShowShortcuts: () -> Void = {}
 
     var body: some View {
-        VStack(spacing: 8) {
-            mainRow
-            styleRow
+        Group {
+            if isVertical {
+                verticalLayout
+            } else {
+                horizontalLayout
+            }
         }
         .padding(.top, 18)
         .padding(.horizontal, 10)
@@ -406,6 +452,215 @@ struct AnnotationToolbarView: View {
         // A toolbar that changes look when the system appearance flips is
         // distracting mid-presentation; the HUD stays dark either way.
         .environment(\.colorScheme, .dark)
+    }
+
+    /// The classic layout for top/bottom docks: tool rows stacked over
+    /// the style row.
+    private var horizontalLayout: some View {
+        VStack(spacing: 8) {
+            mainRow
+            styleRow
+        }
+    }
+
+    /// The side-dock layout: drawing controls in a slim first column,
+    /// session controls and styling in the second.
+    private var verticalLayout: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(spacing: 6) {
+                ForEach(Self.renderableTools, id: \.self) { tool in
+                    ToolButton(
+                        systemImage: Self.toolSymbols[tool] ?? "pencil",
+                        isSelected: coordinator.settings.tool == tool
+                    ) {
+                        if coordinator.isSelectionMode {
+                            coordinator.isSelectionMode = false
+                        }
+                        coordinator.settings.tool = tool
+                    }
+                }
+
+                Divider()
+                    .frame(height: 1)
+
+                AnnotationControlButton(
+                    systemImage: "arrow.uturn.backward",
+                    isEnabled: coordinator.document.canUndo
+                ) {
+                    coordinator.undo()
+                }
+                AnnotationControlButton(
+                    systemImage: "arrow.uturn.forward",
+                    isEnabled: coordinator.document.canRedo
+                ) {
+                    coordinator.redo()
+                }
+                AnnotationControlButton(
+                    systemImage: "trash",
+                    isEnabled: !coordinator.document.annotations.isEmpty
+                        || !coordinator.selectionIDs.isEmpty,
+                    help: L10n.tr(
+                        coordinator.selectionIDs.isEmpty
+                            ? "Clear the canvas"
+                            : "Delete the selected annotations."
+                    )
+                ) {
+                    if coordinator.selectionIDs.isEmpty {
+                        coordinator.clearAll()
+                    } else {
+                        coordinator.deleteSelection()
+                    }
+                }
+
+                Divider()
+                    .frame(height: 1)
+
+                AnnotationControlButton(
+                    systemImage: coordinator.mode == .paused ? "play.fill" : "pause.fill"
+                ) {
+                    coordinator.togglePause()
+                }
+                AnnotationControlButton(
+                    systemImage: "questionmark.circle",
+                    help: L10n.tr("Keyboard shortcuts")
+                ) {
+                    onShowShortcuts()
+                }
+                AnnotationControlButton(systemImage: "gearshape") {
+                    coordinator.onShowAppSettings?()
+                }
+                EffectButton(
+                    systemImage: "pin.fill",
+                    isSelected: isAutoHideEnabled,
+                    help: L10n.tr("Auto-hide")
+                ) {
+                    onToggleAutoHide()
+                }
+
+                Spacer(minLength: 0)
+
+                finishButton
+            }
+
+            Divider()
+
+            VStack(spacing: 6) {
+                EffectButton(
+                    systemImage: "circle.dashed",
+                    isSelected: coordinator.cursorEffects.isHighlightEnabled,
+                    help: L10n.tr("Pointer highlight")
+                ) {
+                    coordinator.cursorEffects.isHighlightEnabled.toggle()
+                }
+                EffectButton(
+                    systemImage: "sun.max.fill",
+                    isSelected: coordinator.cursorEffects.isSpotlightEnabled,
+                    help: L10n.tr("Spotlight")
+                ) {
+                    coordinator.cursorEffects.isSpotlightEnabled.toggle()
+                }
+                EffectButton(
+                    systemImage: "plus.magnifyingglass",
+                    isSelected: coordinator.cursorEffects.isZoomEnabled,
+                    help: L10n.tr("Zoom lens")
+                ) {
+                    coordinator.cursorEffects.isZoomEnabled.toggle()
+                }
+                EffectButton(
+                    systemImage: "cursorarrow.rays",
+                    isSelected: coordinator.cursorEffects.isLaserEnabled,
+                    help: L10n.tr("Laser Pointer")
+                ) {
+                    coordinator.cursorEffects.isLaserEnabled.toggle()
+                }
+
+                Divider()
+                    .frame(height: 1)
+
+                ScreenScopeMenu(coordinator: coordinator)
+
+                RecordButton(
+                    state: coordinator.recordingState,
+                    lastRecordingURL: coordinator.lastRecordingURL,
+                    action: { coordinator.toggleRecording() },
+                    reveal: { coordinator.revealLastRecording() }
+                )
+
+                Divider()
+                    .frame(height: 1)
+
+                EffectButton(
+                    systemImage: "pencil.tip",
+                    isSelected: !coordinator.settings.holdOptionToDraw,
+                    help: L10n.tr(
+                        !coordinator.settings.holdOptionToDraw
+                            ? "The pencil is latched: every click draws on the overlay. Click again to require the drawing key again."
+                            : "Latch the pencil: draw with every click instead of holding the drawing key."
+                    )
+                ) {
+                    coordinator.settings.holdOptionToDraw.toggle()
+                }
+                EffectButton(
+                    systemImage: "snowflake",
+                    isSelected: coordinator.isFreezeActive,
+                    help: L10n.tr(
+                        coordinator.isFreezeActive
+                            ? "The screen is frozen: the displays show a still frame. Click again to go back to the live desktop under the overlay."
+                            : "Freeze the screen: draw over a still frame of the desktop while the apps underneath keep running."
+                    )
+                ) {
+                    Task { await coordinator.toggleFreeze() }
+                }
+                EffectButton(
+                    systemImage: "rectangle.inset.filled",
+                    isSelected: coordinator.isWhiteboardActive,
+                    help: L10n.tr(
+                        coordinator.isWhiteboardActive
+                            ? "The whiteboard is up: the screens show a blank board to draw on. Click again to go back to the see-through overlay over your apps."
+                            : "Whiteboard: cover the screens with a blank board to draw on, without an app underneath."
+                    )
+                ) {
+                    coordinator.toggleWhiteboard()
+                }
+                EffectButton(
+                    systemImage: "cursorarrow.and.square.on.square.dashed",
+                    isSelected: coordinator.isSelectionMode,
+                    help: L10n.tr(
+                        coordinator.isSelectionMode
+                            ? "Move annotations is on: gestures move instead of drawing. Click the button again to draw."
+                            : "Move annotations: drag a marquee to select, drag a selection to move it, use the palette to recolor it, and the trash to delete it."
+                    )
+                ) {
+                    coordinator.toggleSelectionMode()
+                }
+
+                Divider()
+                    .frame(height: 1)
+
+                ColorPalette(
+                    selection: $coordinator.settings.color,
+                    favorites: coordinator.favoriteColors,
+                    onAddFavorite: { coordinator.showColorPanel() },
+                    layout: .grid,
+                    gridColumns: 3
+                )
+
+                Image(systemName: "lineweight")
+                    .foregroundStyle(.white.opacity(0.7))
+
+                // Layout bounds stay unrotated: size the slider flat, spin
+                // it about its centre, then give the stack a tall, slim
+                // slot that matches the rotated visual.
+                Slider(value: $coordinator.settings.lineWidth, in: 1...24, step: 1)
+                    .frame(width: 110, height: 18)
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 24, height: 110)
+
+                VStack(spacing: 6) {
+                    drawingModeChip
+                }
+            }
+        }
     }
 
     private var mainRow: some View {
@@ -611,54 +866,62 @@ struct AnnotationToolbarView: View {
             Slider(value: $coordinator.settings.lineWidth, in: 1...24, step: 1)
                 .frame(width: 110)
 
-            if coordinator.settings.holdOptionToDraw {
-                if coordinator.overlayPassthroughActive {
-                    Text("\(coordinator.drawingModifier.symbol) \(L10n.tr("draw"))")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.65))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.white.opacity(0.10)))
-                        .help(
-                            L10n.tr("While this chip is up, only clicks with the drawing key (⌥, ⌃ or ⌘) held draw on the overlay; every other click reaches the app underneath.")
-                        )
-                } else {
-                    Text(L10n.tr("capture mode"))
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.yellow.opacity(0.9))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.yellow.opacity(0.12)))
-                        .help(
-                            L10n.tr("The overlay captures every click until Accessibility is granted (System Settings → Privacy & security → Accessibility). Press here to open it.")
-                        )
-                        .onTapGesture {
-                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                                NSWorkspace.shared.open(url)
-                            }
-                        }
-                }
-            } else {
-                // Capturing every click is a *chosen* mode; without a chip it
-                // reads as "broken" from the toolbar and the escape hatches
-                // (pause, the toggle back on) stay hidden.
-                Text(L10n.tr("capture all"))
+            drawingModeChip
+        }
+        .padding(.horizontal, 4)
+    }
+
+    /// The click-mode chip of the style row: what a click does right
+    /// now (draw key held, capture pending Accessibility, or capture
+    /// everything by choice). Shared with the vertical layout.
+    @ViewBuilder
+    private var drawingModeChip: some View {
+        if coordinator.settings.holdOptionToDraw {
+            if coordinator.overlayPassthroughActive {
+                Text("\(coordinator.drawingModifier.symbol) \(L10n.tr("draw"))")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.65))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.blue.opacity(0.22)))
+                    .background(Capsule().fill(Color.white.opacity(0.10)))
                     .help(
-                        L10n.tr("The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here to require the drawing key again.")
+                        L10n.tr("While this chip is up, only clicks with the drawing key (⌥, ⌃ or ⌘) held draw on the overlay; every other click reaches the app underneath.")
+                    )
+            } else {
+                Text(L10n.tr("capture mode"))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.yellow.opacity(0.9))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.yellow.opacity(0.12)))
+                    .help(
+                        L10n.tr("The overlay captures every click until Accessibility is granted (System Settings → Privacy & security → Accessibility). Press here to open it.")
                     )
                     .onTapGesture {
-                        // The pencil latch button toggles the same flag; this
-                        // tap flips back without the detour through Settings.
-                        coordinator.settings.holdOptionToDraw = true
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                            NSWorkspace.shared.open(url)
+                        }
                     }
             }
+        } else {
+            // Capturing every click is a *chosen* mode; without a chip it
+            // reads as "broken" from the toolbar and the escape hatches
+            // (pause, the toggle back on) stay hidden.
+            Text(L10n.tr("capture all"))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.65))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color.blue.opacity(0.22)))
+                .help(
+                    L10n.tr("The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here to require the drawing key again.")
+                )
+                .onTapGesture {
+                    // The pencil latch button toggles the same flag; this
+                    // tap flips back without the detour through Settings.
+                    coordinator.settings.holdOptionToDraw = true
+                }
         }
-        .padding(.horizontal, 4)
     }
 
     private var finishButton: some View {

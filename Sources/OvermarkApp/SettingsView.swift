@@ -775,6 +775,14 @@ struct ColorPalette: View {
     var favorites: [AnnotationColor] = []
     /// Starts the "add a colour" flow when non-nil.
     var onAddFavorite: (() -> Void)? = nil
+    /// Row lays the swatches out horizontally (settings + horizontal
+    /// toolbar); grid wraps them in a fixed-count grid so the vertical
+    /// toolbar can host the same palette in a narrow column.
+    var layout: Layout = .row
+    /// Swatches per row when the palette uses the grid layout.
+    var gridColumns: Int = 4
+
+    enum Layout { case row, grid }
 
     /// Built-ins plus any favourites that are not already in the palette.
     private var swatches: [AnnotationColor] {
@@ -782,42 +790,77 @@ struct ColorPalette: View {
     }
 
     var body: some View {
+        switch layout {
+        case .row: rowBody
+        case .grid: gridBody
+        }
+    }
+
+    private var rowBody: some View {
         HStack(spacing: 10) {
             ForEach(swatches, id: \.self) { color in
-                Circle()
-                    .fill(color.swiftUIColor)
-                    .frame(width: 22, height: 22)
-                    .overlay {
-                        Circle()
-                            .strokeBorder(
-                                selection == color ? Color.primary : Color.clear,
-                                lineWidth: 2
-                            )
-                            .padding(-3)
-                    }
-                    .onTapGesture {
-                        selection = color
-                    }
+                swatchView(color)
             }
 
-            if let onAddFavorite {
-                Button(action: onAddFavorite) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .semibold))
-                        .frame(width: 18, height: 18)
-                        .background(
-                            Circle()
-                                .strokeBorder(
-                                    Color.primary.opacity(0.45),
-                                    style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
-                .help(L10n.tr("Add colour…"))
+            if onAddFavorite != nil {
+                surplusButton
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// A compact multi-row arrangement for narrow columns (the vertical
+    /// toolbar): same swatch tiles, wrapped `gridColumns` per row.
+    private var gridBody: some View {
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.fixed(26), spacing: 6), count: max(1, gridColumns)
+            ),
+            spacing: 6
+        ) {
+            ForEach(swatches, id: \.self) { color in
+                swatchView(color)
+            }
+
+            if onAddFavorite != nil {
+                surplusButton
+            }
+        }
+    }
+
+    private func swatchView(_ color: AnnotationColor) -> some View {
+        Circle()
+            .fill(color.swiftUIColor)
+            .frame(width: 22, height: 22)
+            .overlay {
+                Circle()
+                    .strokeBorder(
+                        selection == color ? Color.primary : Color.clear,
+                        lineWidth: 2
+                    )
+                    .padding(-3)
+            }
+            .onTapGesture {
+                selection = color
+            }
+    }
+
+    private var surplusButton: some View {
+        Button(action: onAddFavorite ?? {}) {
+            Image(systemName: "plus")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 18, height: 18)
+                .background(
+                    Circle()
+                        .strokeBorder(
+                            Color.primary.opacity(0.45),
+                            style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .help(L10n.tr("Add colour…"))
     }
 }
 
