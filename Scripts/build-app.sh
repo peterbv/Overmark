@@ -10,10 +10,18 @@
 #
 # Usage:
 #   Scripts/build-app.sh [--debug] [--sign "Developer ID Application: ..."]
+#                        [--notary-profile MY_PROFILE]
 #
-# Without a signing identity the app is signed ad-hoc, which is enough to run
-# it locally but not to distribute it: macOS will still ask the user to
-# confirm an unidentified developer.
+# Signing is automatic when the keychain holds a "Developer ID Application"
+# certificate: the script picks the first one. Force ad-hoc signing (e.g. in
+# CI) with OVERMARK_SIGN_IDENTITY="-". Without any Developer ID certificate
+# the app is signed ad-hoc, which is enough to run it locally but not to
+# distribute it: macOS will still ask the user to confirm an unidentified
+# developer.
+#
+# After the DMG is built, a Developer ID app can be notarized when a keychain
+# profile was stored with `xcrun notarytool store-credentials`, passed as
+# OVERMARK_NOTARY_PROFILE (or --notary-profile). See Support/DISTRIBUTION.md.
 
 set -euo pipefail
 
@@ -21,9 +29,11 @@ readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly APP_NAME="Overmark"
 readonly BUNDLE_ID="com.overmark.app"
 readonly SIGNING_IDENTITY="${OVERMARK_SIGN_IDENTITY:-}"
+readonly NOTARY_PROFILE="${OVERMARK_NOTARY_PROFILE:-}"
 
 CONFIGURATION="release"
 IDENTITY="-"
+NOTARY_PROFILE_OPT=""
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -35,8 +45,12 @@ while [[ $# -gt 0 ]]; do
 			IDENTITY="$2"
 			shift 2
 			;;
+		--notary-profile)
+			NOTARY_PROFILE_OPT="$2"
+			shift 2
+			;;
 		-h | --help)
-			sed -n '2,20p' "${BASH_SOURCE[0]}"
+			sed -n '2,22p' "${BASH_SOURCE[0]}"
 			exit 0
 			;;
 		*)
@@ -46,9 +60,30 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-if [[ -n "$SIGNING_IDENTITY" ]]; then
+if [[ -n "$NOTARY_PROFILE_OPT" ]]; then
+	NOTARY_ID="$NOTARY_PROFILE_OPT"
+elif [[ -n "$NOTARY_PROFILE" ]]; then
+	NOTARY_ID="$NOTARY_PROFILE"
+else
+	NOTARY_ID=""
+fi
+
+# Automatic signing: when the user did not pick an identity, look for a
+# Developer ID certificate in the keychain and use the first one. This keeps
+# local builds frictionless once the certificate exists, and still falls back
+# to ad-hoc (with its stable pinned requirement) before that.
+if [[ -z "$SIGNING_IDENTITY" && "$IDENTITY" == "-" ]]; then
+	DETECTED="$(security find-identity -v -p codesigning 2>/dev/null \
+		| sed -n 's/^[[:space:]]*[0-9][0-9]*) .*"\(Developer ID Application: .*\)"/\1/p' \
+		| head -n1 || true)"
+	if [[ -n "$DETECTED" ]]; then
+		IDENTITY="$DETECTED"
+		echo "==> Signing identity found: $IDENTITY"
+	fi
+elif [[ -n "$SIGNING_IDENTITY" ]]; then
 	IDENTITY="$SIGNING_IDENTITY"
 fi
+readonly IS_DEVELOPER_ID="$([[ "$IDENTITY" == "Developer ID Application:"* ]] && echo yes || echo no)"
 
 readonly DIST="$ROOT/build"
 readonly APP_BUNDLE="$DIST/$APP_NAME.app"
@@ -165,13 +200,39 @@ hdiutil create \
 
 rm -rf "$STAGING" "$ICONSET"
 
+# Notarization is only meaningful for a Developer ID signature, and it needs
+# a profile stored once with `xcrun notarytool store-credentials`. The app
+# itself is already signed with `--options runtime --timestamp`, which is
+# what Gatekeeper checks.
+if [[ "$IS_DEVELOPER_ID" == "yes" && "$CONFIGURATION" == "release" ]]; then
+	if [[ -n "$NOTARY_ID" ]]; then
+		echo "==> Notarizing the DMG (profile: $NOTARY_ID)"
+		xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_ID" --wait
+		xcrun stapler staple "$DMG"
+		echo "==> Notarization stapled."
+	else
+		echo
+		echo "Signed with a Developer ID certificate, but not notarized."
+		echo "Store a credentials profile once with:"
+		echo '  xcrun notarytool store-credentials OVERMARK_NOTARY'
+		echo "and re-run with:"
+		echo "  OVERMARK_NOTARY_PROFILE=OVERMARK_NOTARY Scripts/build-app.sh"
+		echo "Guide: Support/DISTRIBUTION.md"
+	fi
+fi
+
 echo
 echo "Done."
 echo "  App:  $APP_BUNDLE"
 echo "  DMG:  $DMG"
-if [[ "$IDENTITY" == "-" ]]; then
+if [[ "$IS_DEVELOPER_ID" == "yes" ]]; then
+	echo
+	echo "Signed with \"$IDENTITY\". Ready for distribution once notarized"
+	echo "(Gatekeeper accepts Developer ID apps after notarization)."
+elif [[ "$IDENTITY" == "-" ]]; then
 	echo
 	echo "Signed ad-hoc. macOS will ask you to confirm an unidentified developer"
-	echo "the first time you open it. For distribution, sign with:"
+	echo "the first time you open it. Once you have a Developer ID certificate"
+	echo "the script picks it up automatically; you can also pass one with:"
 	echo "  Scripts/build-app.sh --sign \"Developer ID Application: YOUR NAME (TEAMID)\""
 fi
