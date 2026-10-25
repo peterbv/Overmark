@@ -43,6 +43,9 @@
 - Barra flotante vertical: en los docks laterales la misma barra se arma en
   dos columnas (herramientas/control | efectos/estilo con paleta en grilla),
   reconstruida en vivo al alternar la orientación del dock.
+- Barra minimizada por defecto: herramientas + undo/rehacer/basura + pausa +
+  Listo en una fila (o columna); el chevron re-fluye a la barra completa y
+  de vuelta en un clic.
 - 163 tests (24 suites Swift Testing, incluida "Toolbar dock") + 24
   XCTest — verdes en cada cambio.
 
@@ -60,6 +63,7 @@
 | 14 | **Exportar PNG/PDF de la sesión** | Media | **Hecho** | Migrado del banco de ideas. Ítems "Export PNG…/Export PDF…" en el menú (al lado de Save Screenshot…): el compositor ya produce la imagen final (anotaciones + pizarra + freeze) y `GraphicsExport` (CG-puro, testeado) la envuelve en PNG (ImageIO) o PDF de una página (CGPDFContext, página blanca para que los visores no pinten alpha como negro). NSSavePanel con nombre `Overmark-fecha`; sin hotkeys esta ronda. GIF animado sigue en el banco por peso (SCStream→GIF). |
 | 15 | **Dock de la barra flotante** | Alta (pedido del owner) | **Hecho** | Settings → General: anclar la barra Arriba / Abajo / Izquierda / Derecha (persistido, aplicado en vivo vía `reapplyDock`). La pestañita de recuperación se ancla SIEMPRE al slot del dock (borde de pantalla, 48×12) — deja de derivar con cada plegado (causa raíz: pegarla al borde de la barra, que cambia con el arrastre). Desplegar vuelve exactamente al dock; el arrastre quedó libre (sin snap a esquinas) y el dock es el único imán. Orientación vertical de dos columnas hecha en #16. |
 | 16 | **Barra flotante vertical** | Alta (pedido del owner) | **Hecho** | En los docks laterales la barra se arma en dos columnas (~240×700): herramientas + undo/trash + pausa/ayuda/preferencias/pin + Listo en la primera; efectos, alcance, grabación, lápiz/pizarra/congelar/marquee, paleta en grilla, slider vertical y chips en la segunda. `reapplyDock` reconstruye el contenido al alternar orientación; el handle pasa a una tira vertical en el borde interno; el drag libre y el re-use de estilos se mantienen. |
+| 17 | **Modo minimizado de la barra** | Media (idea del owner) | **Hecho** | La barra arranca minimizada: herramientas + undo/rehacer/basura + pausa + Listo en una fila (580×60) o una columna (84×540) según el dock. El mismo chevron que comparte la barra completa la re-fluye y el panel se re-ancla al dock con el tamaño nuevo. Sin preferencia: es estado del controller (arranca minimizado en cada sesión). |
 
 ## 2. Mejoras rápidas (una sesión cada una)
 
@@ -91,6 +95,19 @@
 - **Multiventana de grabación**: grabar dos ventanas en paralelo.
 
 ## Registro de decisiones
+
+- **25 oct 2026** — **#17 hecho: modo minimizado de la barra** (idea del
+  owner: "un modo minimizado con las funciones más útiles y poder expandir
+  para mostrar todas"). Piezas: (1) la barra arranca **minimizada** —
+  herramientas + undo/rehacer/basura + pausa + chevron + Listo en una
+  fila (o una columna en docks laterales). (2) El mismo chevron en la
+  barra completa la devuelve al compacto; el panel re-ancla al dock con el
+  tamaño nuevo (`toggleMinimized()` en el controller, expuesto como
+  `toggleToolbarMinimized()` — predeterminado true, sin preferencia). (3)
+  `compactBarSize` (580×60) / `compactVerticalBarSize` (84×540) alimentan
+  `dockRect`. (4) Ayudas es/en ("Show only the essentials" / "Show all
+  controls" — "Mostrar solo lo esencial / todas las funciones").
+  (Cierre del pedido de la barra junto a #15/#16 del 23 oct.)
 
 - **23 oct 2026** — **#15 hecho: dock de la barra flotante** (pedido del
   owner: "la pestañita sigue moviéndose de lugar cada vez que aparece; debe

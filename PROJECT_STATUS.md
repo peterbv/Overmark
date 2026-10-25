@@ -227,6 +227,17 @@ presentaciones, sin congelar el escritorio.
   cuando el dock es lateral; el arrastre libre con regreso al dock sigue
   igual. Tests y helps reutilizan los mismos strings es/en.
 
+### Modo minimizado de la barra
+- Por defecto la barra arranca **minimizada**: herramientas + undo/rehacer/
+  basura + pausa + chevron + **Listo** en una fila (580×60) o una columna
+  (84×540) según el dock — una barra fácil de manejar con lo esencial de
+  siempre a mano.
+- El mismo chevron vive en la barra completa: un clic re-fluye al modo
+  completo y otro vuelve al compacto; el panel se re-ancla al dock actual
+  con el tamaño nuevo (sin saltos ni deriva).
+- Sin preferencia persistida: es estado del controller (`isMinimizedMode`,
+  expuesto como `toggleToolbarMinimized()` para el probe).
+
 ### Extras
 - **Español por defecto**, inglés y automático; cambio en Preferencias → General → Idioma
   (se persiste). Toda la UI traducida (menú, barra, ajustes, onboarding, editor, errores).
@@ -413,6 +424,14 @@ presentaciones, sin congelar el escritorio.
     alternar orientación en vivo y el handle pasa a tira vertical interna
     (12×80). Sin tests nuevos (ronda UI, convención previa); probe agrega
     paso `.leading` que ejercita el contenido vertical.
+
+31. Modo minimizado de la barra (idea del owner): arranca minimized —
+    herramientas + undo/rehacer/basura + pausa + chevron + Listo en una
+    fila (580×60) o columna (84×540) según el dock; el mismo chevron en la
+    barra completa re-fluye entre modos y el panel re-ancla al dock con el
+    tamaño nuevo (`toggleMinimized` / `toggleToolbarMinimized()` para el
+    probe). Estado del controller, sin preferencia ni tests nuevos; probe
+    expande y minimiza en vivo tras el restore del dock.
 
 `swift build` limpio · `swift test` verde: **163** pruebas Swift Testing (24 suites, incluida
 "Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
