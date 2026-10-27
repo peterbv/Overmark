@@ -216,10 +216,11 @@ presentaciones, sin congelar el escritorio.
 
 ### Barra flotante vertical
 - En los docks Izquierda / Derecha la barra se arma en dos columnas
-  (~240×700): herramientas + undo/trash + pausa/ayuda/preferencias/pin +
-  **Listo** en la primera; efectos, alcance de pantallas, grabación,
-  lápiz/pizarra/congelar/marquee, paleta en grilla (3 columnas), slider
-  vertical (rotado) y chips en la segunda.
+  (~200×700): herramientas + undo/trash + pausa/ayuda/preferencias/pin +
+  **Listo** en la primera; efectos, alcance de pantallas (tile icon-only,
+  los nombres quedan solo en el popup), grabación, lápiz/pizarra/congelar/
+  marquee, paleta en grilla (3 columnas) y **grosor por chevrons** en la
+  segunda.
 - `reapplyDock()` reconstruye el contenido al alternar entre orientaciones
   en vivo (Arriba⇄Izquierda etc.); los docks horizontales conservan el
   layout de filas original sin cambios.
@@ -499,6 +500,22 @@ presentaciones, sin congelar el escritorio.
     La sonda imprime `[PROBE] toolbar sizes: full 1169×104, minimized
     580×60` para que un drift similar vuelva a verse en cualquier
     ronda. Docks, pestaña de auto-ocultar y minimized intactos;
+    métricas intactas (163 + 24).
+
+35. Dos ajustes de la barra vertical (pedidos del owner): (1) el control
+    de grosor ya no es un slider rotado −90° — el hit-testing del SwiftUI
+    Slider no sigue la rotación y los drags se registraban mal ("simplemente
+    no deja aumentar el ancho"): ahora es un **stepper** de chevrons
+    arriba/abajo (+1/−1, con auto-repeat al mantener presionado) alrededor
+    del valor numérico visible; (2) el alcance de pantallas pasa a un tile
+    icon-only en la columna vertical (`ScreenScopeMenu(showsTitle: false)`):
+    el popup con los nombres se abre al costado y la barra pierde ancho
+    (el piso vertical baja 240 → 200; la barra real se mide en 202×700, la
+    imprime la sonda de tamaños). Además la colilla de grabación ahora
+    tiene techo de ancho (120 pt, truncado al medio) para que un nombre
+    de archivo largo no inflara la columna. La sonda imprime los cuatro
+    layouts: `[PROBE] toolbar sizes: full 1169×104, minimized 580×60 (dock
+    h); vertical full 202×700, minimized 91×540`. Horizontal sin cambios;
     métricas intactas (163 + 24).
 
 `swift build` limpio · `swift test` verde: **163** pruebas Swift Testing (24 suites, incluida

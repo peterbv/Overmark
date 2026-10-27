@@ -62,7 +62,7 @@
 | 13 | **Mover y recolorear anotaciones (marquee)** | Media | **Hecho** | Migrado del banco de ideas. Botón de selección en la barra: marquee por intersección de límites; arrastrar una selección la mueve con clamp a la pantalla; la paleta recolorea la selección (color sólido, limpia gradiente); la basura borra lo seleccionado (si no hay selección limpia todo). Un solo undo por gesto (batch `update`/`remove(id:)`). Pasa a dibujar (elegir herramienta) limpia la selección. |
 | 14 | **Exportar PNG/PDF de la sesión** | Media | **Hecho** | Migrado del banco de ideas. Ítems "Export PNG…/Export PDF…" en el menú (al lado de Save Screenshot…): el compositor ya produce la imagen final (anotaciones + pizarra + freeze) y `GraphicsExport` (CG-puro, testeado) la envuelve en PNG (ImageIO) o PDF de una página (CGPDFContext, página blanca para que los visores no pinten alpha como negro). NSSavePanel con nombre `Overmark-fecha`; sin hotkeys esta ronda. GIF animado sigue en el banco por peso (SCStream→GIF). |
 | 15 | **Dock de la barra flotante** | Alta (pedido del owner) | **Hecho** | Settings → General: anclar la barra Arriba / Abajo / Izquierda / Derecha (persistido, aplicado en vivo vía `reapplyDock`). La pestañita de recuperación se ancla SIEMPRE al slot del dock (borde de pantalla, 48×12) — deja de derivar con cada plegado (causa raíz: pegarla al borde de la barra, que cambia con el arrastre). Desplegar vuelve exactamente al dock; el arrastre quedó libre (sin snap a esquinas) y el dock es el único imán. Orientación vertical de dos columnas hecha en #16. |
-| 16 | **Barra flotante vertical** | Alta (pedido del owner) | **Hecho** | En los docks laterales la barra se arma en dos columnas (~240×700): herramientas + undo/trash + pausa/ayuda/preferencias/pin + Listo en la primera; efectos, alcance, grabación, lápiz/pizarra/congelar/marquee, paleta en grilla, slider vertical y chips en la segunda. `reapplyDock` reconstruye el contenido al alternar orientación; el handle pasa a una tira vertical en el borde interno; el drag libre y el re-use de estilos se mantienen. |
+| 16 | **Barra flotante vertical** | Alta (pedido del owner) | **Hecho** | En los docks laterales la barra se arma en dos columnas (~200×700, medido 202): herramientas + undo/trash + pausa/ayuda/preferencias/pin + Listo en la primera; efectos, alcance icon-only (popup al costado), grabación, lápiz/pizarra/congelar/marquee, paleta en grilla y grosor por stepper (chevrons + valor, #35) en la segunda. `reapplyDock` reconstruye el contenido al alternar orientación; el handle pasa a una tira vertical en el borde interno; el drag libre y el re-use de estilos se mantienen. |
 | 17 | **Modo minimizado de la barra** | Media (idea del owner) | **Hecho** | La barra arranca minimizada: herramientas + undo/rehacer/basura + pausa + Listo en una fila (580×60) o una columna (84×540) según el dock. El mismo chevron que comparte la barra completa la re-fluye y el panel se re-ancla al dock con el tamaño nuevo. Sin preferencia: es estado del controller (arranca minimizado en cada sesión). |
 
 ## 2. Mejoras rápidas (una sesión cada una)
@@ -95,6 +95,22 @@
 - **Multiventana de grabación**: grabar dos ventanas en paralelo.
 
 ## Registro de decisiones
+
+- **26 oct 2026** — **#35 hecho: grosor manejable y barra vertical más
+  angosta** (dos pedidos del owner sobre la barra en vertical: el control
+  "simplemente no deja aumentar el ancho" y el select de pantallas que se
+  abra al costado). (1) El slider de grosor rotado −90° era el bug: el
+  hit-testing del SwiftUI Slider no acompaña la rotación y los drags se
+  perdían — lo reemplaza un **stepper** de chevrons + valor numérico
+  (±1 con auto-repeat al mantener, límites 1…24, teclas repetibles). (2)
+  `ScreenScopeMenu` gana `showsTitle: false`: en la columna vertical es un
+  tile icon-only de 32×28 cuyo popup abre al costado con los nombres
+  (tooltip con el resumen); el horizontal conserva el botón con título.
+  El piso vertical baja 240 → 200 y la barra real se mide 202×700; la
+  colilla de grabación tiene techo de 120 pt con truncado al medio para
+  que un nombre de archivo largo no ensanche la columna. La sonda imprime
+  los 4 layouts (`vertical full 202×700, minimized 91×540`). Sin tests
+  nuevos (ronda UI); métricas intactas (163 + 24).
 
 - **26 oct 2026** — **Fix: la barra expandida ya no se recorta** (lo
   reportó el owner: minimizado bien, expandido cortado, "se nota que
