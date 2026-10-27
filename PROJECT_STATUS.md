@@ -483,6 +483,24 @@ presentaciones, sin congelar el escritorio.
     intactas (163 + 24); el resto de la deuda de la revisión quedó
     anotada en el Roadmap/backlog.
 
+34. Fix reportado por el owner: al expandir la barra (minimizado →
+    completo con el chevron) quedaba **recortada** ("se nota que hay un
+    contenedor cortando la barra"). Causa: los tamaños de ventana eran
+    constantes congeladas de la ronda del dock (`barSize` 760×104 era
+    anterior a los controles añadidos después — grabación, alcance,
+    lápiz de bloqueo, selección, congelar, pizarra…); el layout
+    expandido ideal mide **1169×104** (la sonda nueva lo imprime), o
+    sea ~400 pt de botones fuera de la ventana. Fix: los tamaños se
+    **miden del contenido** (hosting de tanteo con
+    `.intrinsicContentSize` — el ideal de SwiftUI, independiente del
+    marco —, cacheado por variante dock×modo; las constantes antiguas
+    solo quedan como piso mínimo) y el tamaño además se limita al
+    `visibleFrame` de la pantalla, que antes solo clampeaba el origen.
+    La sonda imprime `[PROBE] toolbar sizes: full 1169×104, minimized
+    580×60` para que un drift similar vuelva a verse en cualquier
+    ronda. Docks, pestaña de auto-ocultar y minimized intactos;
+    métricas intactas (163 + 24).
+
 `swift build` limpio · `swift test` verde: **163** pruebas Swift Testing (24 suites, incluida
 "Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda

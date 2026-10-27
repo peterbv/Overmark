@@ -96,6 +96,21 @@
 
 ## Registro de decisiones
 
+- **26 oct 2026** — **Fix: la barra expandida ya no se recorta** (lo
+  reportó el owner: minimizado bien, expandido cortado, "se nota que
+  hay un contenedor que está cortando la barra"). La causa era un
+  tamaño congelado: `barSize` = 760×104 databa de antes de que el
+  renglón principal acumulara controles (grabación, alcance, lápiz de
+  bloqueo, selección, congelar, pizarra…) y la barra expandida ideal
+  mide **1169×104** — la ventana comía ~400 pts de botones (atajos,
+  pin, chevron, Done). La ventana ahora se dimensiona por **medición
+  real del contenido**: un hosting de tanteo reporta su
+  `intrinsicContentSize` (ideal de SwiftUI, indiferente al marco), se
+  cachea por variante dock×modo, las constantes viejas quedan como
+  piso y el tamaño se limita al `visibleFrame` de la pantalla. La
+  sonda suma `[PROBE] toolbar sizes:` para que el drift vuelva a
+  visible si el layout crece de más otra vez.
+
 - **26 oct 2026** — **Ronda 33: robustez tras revisión de código** (no sale
   del banco de ideas; el owner eligió los 4 prioritarios del informe).
   (1) **Taps a prueba de stall**: macOS puede desactivar un event tap si
