@@ -456,6 +456,33 @@ presentaciones, sin congelar el escritorio.
     DR satisfecho, DMG emitido); sin cambios en código Swift — métricas
     intactas.
 
+33. Revisión externa del código (pasada de exploración + verificación
+    propia sobre `Sources/`) → cuatro fixes de robustez elegidos por el
+    owner: (1) los callbacks del rastreador de cursor y del gate ⌥ re-arman
+    el tap cuando macOS lo desactiva por timeout (`tapDisabledByTimeout`/
+    `tapDisabledByUserInput` → `tapEnable` vía la referencia guardada; el
+    proxy del callback no es el mach port) — antes un stall del run loop
+    mataba lupa/anillo/láser y el ⌥-para-dibujar hasta reiniciar la app —
+    y el tap del cursor baja a `listenOnly` (solo observa); (2) el editor
+    de texto ya no cicla: `onCancel`/`onCommit` sujetan la ventana débil
+    (`[weak window]` → `window?.close()`), que antes filtraba un
+    `NSWindow` + el árbol de hosting SwiftUI por cada edición; (3) todo
+    quit finaliza la grabación: `applicationShouldTerminate` →
+    `prepareForTermination(done:)` espera `runStopRecording` antes de
+    responder (⌘Q, logout y AppleScript producen el `.mov` completo; antes
+    solo el ítem Quit del menú lo hacía) y un `start` de grabadora que
+    falla a mitad limpia su media fila — `discardPartialRun` detiene los
+    streams, cierra el writer y borra el `.mov` huérfano (antes quedaban
+    stream vivo + archivo vacío); de paso el comentario stale de `stop()`
+    (mencionaba un `quit(afterStopping:)` inexistente) quedó corregido;
+    (4) el burn-in de ventana dibuja en una **copia propia** del buffer
+    (copy-first: `CVPixelBufferCreate` + memcpy por filas) en vez de
+    dentro del buffer del pool de SCStream — el caso común sin nada que
+    quemar es zero-copy, y la corrupción/tearing bajo backpressure del
+    encoder deja de ser posible en el camino normal. Sonda y métricas
+    intactas (163 + 24); el resto de la deuda de la revisión quedó
+    anotada en el Roadmap/backlog.
+
 `swift build` limpio · `swift test` verde: **163** pruebas Swift Testing (24 suites, incluida
 "Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda
@@ -495,6 +522,15 @@ open build/Overmark.app
   El rastro del cursor exige Accesibilidad (con/Acc) — sin ella, los
   efectos exigibles al puntero (lupa/anillo/hueco) no se queman ese frame.
 - Escena `Settings` de SwiftUI muerta (se usa ventana propia) — código vivo pero residual.
+- Deuda de la revisión 33 (baja prioridad): el mapeo de pantallas de la
+  grabación de ventana usa `NSScreen.screens.first` (el rastreador de cursor
+  usa el ancla correcta (0,0) — unificar); un fade cancelado a mitad puede
+  dejar opacidad parcial permanente; los overlays del cursor invalidan todo
+  el lienzo en cada mouse-move; cada captura enumera `SCShareableContent`
+  dos veces; fallos de disco del autosave pasan en silencio; undo/redo del
+  menú usa `autoenablesItems` (los ítems exigen validación real); el monitor
+  de captura de atajos armado se come ⌘Q/⌘W; el probe de diagnóstico vive en
+  el binario release.
 
 ## Si lo subimos a GitHub (checklist para cuando toque)
 

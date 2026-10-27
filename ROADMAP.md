@@ -96,6 +96,28 @@
 
 ## Registro de decisiones
 
+- **26 oct 2026** — **Ronda 33: robustez tras revisión de código** (no sale
+  del banco de ideas; el owner eligió los 4 prioritarios del informe).
+  (1) **Taps a prueba de stall**: macOS puede desactivar un event tap si
+  su callback demora; los callbacks de cursor y gate ⌥ re-arman el tap
+  al recibir `tapDisabledByTimeout`/`tapDisabledByUserInput` (`tapEnable`
+  por la referencia guardada — el proxy del callback no es el mach
+  port); `CursorTracker` además baja de `.defaultTap` a `listenOnly` por
+  ser solo observador. (2) **Editor de texto sin ciclo de retención**:
+  `onCancel`/`onCommit` sujetan la ventana débil (`[weak window]`) —
+  window → contentView → closures → window filtraba un `NSWindow` por
+  cada edición. (3) **Quits completos**: ⌘Q/logout/AppleScript pasan por
+  `applicationShouldTerminate` → `prepareForTermination`, que espera la
+  finalización de la grabación antes de responder; y si el `start` de la
+  grabadora falla a mitad (permiso de micro, ventana que muere),
+  `discardPartialRun` detiene los streams, cierra el writer y **borra el
+  `.mov` vacío** — antes quedaban stream vivo + archivo huérfano. El
+  "never left half-written" del README ahora es cierto también saliendo
+  con ⌘Q. (4) **Burn-in copy-first**: el quemado de anotaciones en la
+  grabación de ventana dibuja en una copia propia del buffer y no dentro
+  del buffer del pool de SCStream (riesgo de tearing bajo backpressure);
+  sin anotaciones ni efectos el frame sigue tal cual (zero-copy).
+
 - **25 oct 2026** — **#8 hecho (infra): firma Developer ID + notarización
   listas, a la espera del certificado** (el llavero del owner aún no tiene
   identidades; decisión: dejar el pipeline terminado y documentado). Piezas:
