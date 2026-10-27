@@ -391,9 +391,9 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
                 height: CVPixelBufferGetHeight(pixelBuffer)
             )
         )
-        drawContent(onto: pixelBuffer, geometry: geometry)
+        let prepared = preparedFrame(onto: pixelBuffer, geometry: geometry)
         pipeline.appendScreenFrame(
-            pixelBuffer,
+            prepared,
             presentationTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         )
     }
@@ -410,8 +410,18 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
 
     // MARK: - Content burn-in
 
-    /// Draws the current annotations and cursor effects straight into the
-    /// frame's pixel memory.
+    /// Returns the frame to hand to the encoder: `buffer` untouched when
+    /// nothing needs burning in (the common frame — zero copies), or a
+    /// private copy with the annotations and cursor effects baked in.
+    ///
+    /// Whatever gets drawn is drawn into a copy, never into the delivered
+    /// buffer itself: the buffer belongs to SCStream, which recycles it
+    /// from its own pool, so under writer backpressure a frame can be
+    /// reused or read while we draw — tearing the burn-in or bleeding
+    /// pixels between frames. Drawing into memory we own removes that
+    /// shared state. When the copy cannot be made, the burn-in falls back
+    /// to drawing in place, favouring the feature over the old sharing
+    /// risk.
     ///
     /// The frames the encoder expects are top-down, while a `CGContext` over
     /// the same memory is bottom-up, so the mapping folds into one matrix:
@@ -427,16 +437,16 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
     /// space, so they land where they float on the screen. The lens burns a
     /// *clean* snapshot taken before annotations land, mirroring the
     /// on-screen lens which excludes the overlay windows from its capture.
-    private func drawContent(onto pixelBuffer: CVPixelBuffer, geometry: FrameGeometry?) {
+    private func preparedFrame(onto buffer: CVPixelBuffer, geometry: FrameGeometry?) -> CVPixelBuffer {
         let annotations = annotationsProvider()
         let effectFrame = effectsProvider().flatMap {
             $0.hasBurnableContent ? $0 : nil
         }
-        guard !annotations.isEmpty || effectFrame != nil else { return }
+        guard !annotations.isEmpty || effectFrame != nil else { return buffer }
 
-        let width = CVPixelBufferGetWidth(pixelBuffer)
-        let height = CVPixelBufferGetHeight(pixelBuffer)
-        guard width > 0, height > 0 else { return }
+        let width = CVPixelBufferGetWidth(buffer)
+        let height = CVPixelBufferGetHeight(buffer)
+        guard width > 0, height > 0 else { return buffer }
 
         // Which AppKit rect the current frame shows and where it sits in
         // the buffer: the measured geometry when present, the resolved
@@ -447,12 +457,13 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
         // The buffer holds whole pixels; a fraction of a pixel from a
         // floating-point content rect is clamped so the matrix stays sane.
         content = content.intersection(CGRect(x: 0, y: 0, width: width, height: height))
-        guard content.width > 0, content.height > 0 else { return }
-        guard contentFrame.width > 0, contentFrame.height > 0 else { return }
+        guard content.width > 0, content.height > 0 else { return buffer }
+        guard contentFrame.width > 0, contentFrame.height > 0 else { return buffer }
 
-        CVPixelBufferLockBaseAddress(pixelBuffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
-        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else { return }
+        let target = Self.makeCopy(of: buffer) ?? buffer
+        CVPixelBufferLockBaseAddress(target, [])
+        defer { CVPixelBufferUnlockBaseAddress(target, []) }
+        guard let baseAddress = CVPixelBufferGetBaseAddress(target) else { return buffer }
 
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         // `32BGRA` buffers are little-endian `ARGB` to Core Graphics, which
@@ -462,11 +473,11 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
             width: width,
             height: height,
             bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
+            bytesPerRow: CVPixelBufferGetBytesPerRow(target),
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
                 | CGBitmapInfo.byteOrder32Little.rawValue
-        ) else { return }
+        ) else { return target }
 
         // The window content alone, before anything is burned in: the zoom
         // lens magnifies un-annotated pixels, like it does on-screen.
@@ -495,7 +506,7 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
             context.restoreGState()
         }
 
-        guard let effectFrame else { return }
+        guard let effectFrame else { return target }
         context.saveGState()
         defer { context.restoreGState() }
         context.concatenate(transform)
@@ -618,6 +629,59 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
                 )
             }
         }
+        return target
+    }
+
+    /// Copies a frame buffer byte-for-byte into fresh memory we own so the
+    /// burn-in never draws into an SCStream-pool buffer. Returns `nil` when
+    /// the allocation or the copy fails, and the caller then burns in
+    /// place.
+    private static func makeCopy(of source: CVPixelBuffer) -> CVPixelBuffer? {
+        let width = CVPixelBufferGetWidth(source)
+        let height = CVPixelBufferGetHeight(source)
+        var copy: CVPixelBuffer?
+        guard CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            width,
+            height,
+            kCVPixelFormatType_32BGRA,
+            nil,
+            &copy
+        ) == kCVReturnSuccess, let copy else {
+            return nil
+        }
+
+        CVPixelBufferLockBaseAddress(source, .readOnly)
+        CVPixelBufferLockBaseAddress(copy, [])
+        defer {
+            CVPixelBufferUnlockBaseAddress(copy, [])
+            CVPixelBufferUnlockBaseAddress(source, .readOnly)
+        }
+        guard
+            let sourceBase = CVPixelBufferGetBaseAddress(source),
+            let copyBase = CVPixelBufferGetBaseAddress(copy)
+        else {
+            return nil
+        }
+
+        // Rows may be padded differently between the pool buffer and the
+        // fresh one, so the copy walks row by row unless both strides
+        // agree — then one memcpy suffices.
+        let sourceStride = CVPixelBufferGetBytesPerRow(source)
+        let copyStride = CVPixelBufferGetBytesPerRow(copy)
+        let rowBytes = width * 4
+        if sourceStride == copyStride {
+            memcpy(copyBase, sourceBase, sourceStride * height)
+        } else {
+            for row in 0..<height {
+                memcpy(
+                    copyBase.advanced(by: row * copyStride),
+                    sourceBase.advanced(by: row * sourceStride),
+                    rowBytes
+                )
+            }
+        }
+        return copy
     }
 
     private var stream: SCStream?

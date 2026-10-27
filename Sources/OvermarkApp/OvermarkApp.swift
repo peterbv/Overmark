@@ -291,6 +291,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator.refreshPermissions()
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Finalize a running recording before the process goes away. The
+        // reply is deferred until the writer closed the file, so ⌘Q, logout
+        // and AppleScript quits bank the same complete recording the menu's
+        // Quit command does.
+        coordinator.prepareForTermination {
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         statusObserver = nil
         coordinator.stop()

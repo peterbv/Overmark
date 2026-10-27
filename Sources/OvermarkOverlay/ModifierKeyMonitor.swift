@@ -65,7 +65,16 @@ final class ModifierKeyMonitor {
         guard eventTap == nil else { return true }
 
         let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
-        let callback: CGEventTapCallBack = { _, _, event, refcon in
+        let callback: CGEventTapCallBack = { _, type, event, refcon in
+            // macOS disables an event tap whose callback stalls or whose run
+            // loop is busy for a moment. Re-arm immediately, otherwise the
+            // ⌥ pass-through gate dies silently until relaunch.
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput, let refcon {
+                let monitor = Unmanaged<ModifierKeyMonitor>.fromOpaque(refcon)
+                    .takeUnretainedValue()
+                MainActor.assumeIsolated { monitor.rearmTap() }
+                return Unmanaged.passUnretained(event)
+            }
             guard let refcon else { return Unmanaged.passUnretained(event) }
             let monitor = Unmanaged<ModifierKeyMonitor>
                 .fromOpaque(refcon)
@@ -98,6 +107,15 @@ final class ModifierKeyMonitor {
         eventTap = tap
         runLoopSource = source
         return true
+    }
+
+    /// Re-enables the tap after macOS disabled it (a stalled callback or a
+    /// busy run loop). The proxy a callback receives is not the tap's mach
+    /// port, so the re-arm goes through the stored reference.
+    private func rearmTap() {
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: true)
+        }
     }
 
     func stop() {

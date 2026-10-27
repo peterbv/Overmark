@@ -125,12 +125,22 @@ public actor PresentationRecorder {
                 effectsProvider: configuration.effectsProvider,
                 windowFrame: resolved.appKitFrame
             )
-            try await window.start(resolved, frameRate: configuration.settings.frameRate)
-
-            self.pipeline = freshPipeline
-            self.windowSource = window
-            try startMicrophoneIfIncluded(includesAudio)
-            return url
+            // The writer owns the destination file from here on: any
+            // failing stage must tear the half-started run down, or a
+            // broken start leaves streams running and an empty `.mov` in
+            // the recordings folder.
+            do {
+                try await window.start(resolved, frameRate: configuration.settings.frameRate)
+                let microphone = try makeMicrophoneSource(includesAudio: includesAudio, pipeline: freshPipeline)
+                // The run is fully wired — publish it for stop() to drain.
+                self.microphoneSource = microphone
+                self.pipeline = freshPipeline
+                self.windowSource = window
+                return url
+            } catch {
+                await discardPartialRun(pipeline: freshPipeline, screen: nil, window: window, fileURL: url)
+                throw error
+            }
         }
 
         let encodeSize = Self.encodeSize(displayID: configuration.displayID, capped: Self.maxEncodePixels)
@@ -143,26 +153,59 @@ public actor PresentationRecorder {
             includesAudio: includesAudio
         )
         let screen = ScreenRecordingSource(pipeline: freshPipeline)
-        try await screen.start(
-            displayID: configuration.displayID,
-            pixelWidth: encodeSize.width,
-            pixelHeight: encodeSize.height,
-            frameRate: configuration.settings.frameRate,
-            excludedWindowNumbers: configuration.excludedWindowNumbers
-        )
-
-        self.pipeline = freshPipeline
-        self.screenSource = screen
-        try startMicrophoneIfIncluded(includesAudio)
-        return url
+        do {
+            try await screen.start(
+                displayID: configuration.displayID,
+                pixelWidth: encodeSize.width,
+                pixelHeight: encodeSize.height,
+                frameRate: configuration.settings.frameRate,
+                excludedWindowNumbers: configuration.excludedWindowNumbers
+            )
+            let microphone = try makeMicrophoneSource(includesAudio: includesAudio, pipeline: freshPipeline)
+            self.microphoneSource = microphone
+            self.pipeline = freshPipeline
+            self.screenSource = screen
+            return url
+        } catch {
+            await discardPartialRun(pipeline: freshPipeline, screen: screen, window: nil, fileURL: url)
+            throw error
+        }
     }
 
-    /// Wires the microphone tap in when the run asked for one.
-    private func startMicrophoneIfIncluded(_ includesAudio: Bool) throws {
-        guard includesAudio, let pipeline else { return }
+    /// Wires the microphone tap in when the run asked for one. The source
+    /// is handed back instead of stored, so a later failing stage of
+    /// `start` can tear the whole run down without publishing anything.
+    private func makeMicrophoneSource(
+        includesAudio: Bool,
+        pipeline: RecorderPipeline
+    ) throws -> MicrophoneRecordingSource? {
+        guard includesAudio else { return nil }
         let source = MicrophoneRecordingSource(pipeline: pipeline)
-        try source.start()
-        self.microphoneSource = source
+        do {
+            try source.start()
+        } catch {
+            // The tap may already be installed on the engine it failed to
+            // start; stop() releases everything the source created.
+            source.stop()
+            throw error
+        }
+        return source
+    }
+
+    /// Tears down a run whose start failed partway: the sources stop
+    /// draining, the pipeline closes whatever landed in the file and the
+    /// empty or truncated artifact is removed — a failed start leaves
+    /// nothing behind.
+    private func discardPartialRun(
+        pipeline: RecorderPipeline,
+        screen: ScreenRecordingSource?,
+        window: WindowRecordingSource?,
+        fileURL: URL
+    ) async {
+        await screen?.stop()
+        await window?.stop()
+        _ = await pipeline.finish()
+        try? FileManager.default.removeItem(at: fileURL)
     }
 
     /// Stops both sources, drains pending frames and closes the file.

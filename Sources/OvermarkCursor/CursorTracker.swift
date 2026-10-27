@@ -72,7 +72,17 @@ public final class CursorTracker {
                 | (1 << CGEventType.rightMouseDragged.rawValue)
                 | (1 << CGEventType.otherMouseDragged.rawValue)
         )
-        let callback: CGEventTapCallBack = { _, _, event, refcon in
+        let callback: CGEventTapCallBack = { _, type, event, refcon in
+            // macOS disables an event tap whose callback stalls or whose run
+            // loop is busy for a moment. Without re-arming here the cursor
+            // effects die silently until relaunch, so switch the tap back on
+            // and pass the event through untouched.
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput, let refcon {
+                let tracker = Unmanaged<CursorTracker>.fromOpaque(refcon)
+                    .takeUnretainedValue()
+                MainActor.assumeIsolated { tracker.rearmTap() }
+                return Unmanaged.passUnretained(event)
+            }
             // Pass the event through untouched; we only observe it.
             guard let refcon else { return Unmanaged.passUnretained(event) }
             let tracker = Unmanaged<CursorTracker>
@@ -86,10 +96,13 @@ public final class CursorTracker {
             return Unmanaged.passUnretained(event)
         }
 
+        // A listen-only tap observes the event without being able to swallow
+        // it, which is all this tracker needs — it also avoids the extra
+        // privileges a default tap requests.
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .defaultTap,
+            options: .listenOnly,
             eventsOfInterest: mask,
             callback: callback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -103,6 +116,15 @@ public final class CursorTracker {
 
         eventTap = tap
         runLoopSource = source
+    }
+
+    /// Re-enables the tap after macOS disabled it (a stalled callback or a
+    /// busy run loop). The proxy a callback receives is not the tap's mach
+    /// port, so the re-arm goes through the stored reference.
+    private func rearmTap() {
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: true)
+        }
     }
 
     /// Stops tracking the pointer.

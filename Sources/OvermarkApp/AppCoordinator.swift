@@ -454,8 +454,26 @@ public final class AppCoordinator: ObservableObject {
         }
         accessibilityObserver = nil
         mode = .idle
-        // A recording still being finalized keeps running on its own task;
-        // `applicationWillTerminate` awaits it via `quit(afterStopping:)`.
+        // The recorder is deliberately untouched here: a running or
+        // finishing recording is finalized by `runStopRecording()`, which
+        // `prepareForTermination` awaits from `applicationShouldTerminate`
+        // before the process is allowed to die.
+    }
+
+    /// Lets the host wait out a recording before the process dies: `done`
+    /// runs after a running or finishing recording is finalized — or right
+    /// away when none is. Wired to `applicationShouldTerminate`, so ⌘Q,
+    /// logout and AppleScript quits finalize the file the same way the
+    /// menu's Quit command does.
+    public func prepareForTermination(_ done: @escaping () -> Void) {
+        guard recordingState.isActive else {
+            done()
+            return
+        }
+        Task {
+            await runStopRecording()
+            done()
+        }
     }
 
     // MARK: - Documents
@@ -1235,12 +1253,16 @@ public final class AppCoordinator: ObservableObject {
                 color: existing?.color ?? settings.color,
                 lineWidth: existing?.lineWidth ?? settings.lineWidth,
                 initialText: existing?.text ?? "",
-                onCancel: { [weak self] in
-                    window.close()
+                // Hold the window weakly: the hosting view chain reaches
+                // these closures, so a strong capture here (to call close())
+                // would cycle window → contentView → editor → window and
+                // leak the panel after every edit.
+                onCancel: { [weak self, weak window] in
+                    window?.close()
                     self?.endTextEditing()
                 },
-                onCommit: { [weak self] (text: String) in
-                    window.close()
+                onCommit: { [weak self, weak window] (text: String) in
+                    window?.close()
                     self?.endTextEditing()
                     if let existing {
                         self?.updateTextAnnotation(existing, with: text)
