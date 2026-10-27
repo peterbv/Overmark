@@ -16,8 +16,10 @@ import SwiftUI
 final class AnnotationToolbarController {
     private static let barSize = NSSize(width: 760, height: 104)
     /// The vertical layout the side docks present: two slim columns
-    /// instead of two full-width rows.
-    private static let verticalBarSize = NSSize(width: 240, height: 700)
+    /// instead of two full-width rows. The width is a floor — the bar
+    /// measures its content — sized so the palette grid plus columns
+    /// breathe without padding every spare point.
+    private static let verticalBarSize = NSSize(width: 200, height: 700)
     /// The minimized layouts: only the essentials (tools, history,
     /// pause, the expansion toggle and Done), one row or one column. The
     /// defaults that keep the bar out of the way until everything is
@@ -142,8 +144,11 @@ final class AnnotationToolbarController {
         let vertical = !coordinator.toolbarDock.isHorizontal
         let full = layoutSize(vertical: vertical, minimized: false)
         let compact = layoutSize(vertical: vertical, minimized: true)
-        return "full \(Int(full.width))×\(Int(full.height))"
-            + ", minimized \(Int(compact.width))×\(Int(compact.height))"
+        let verticalFull = layoutSize(vertical: true, minimized: false)
+        let verticalCompact = layoutSize(vertical: true, minimized: true)
+        let cLetter = vertical ? "v" : "h"
+        return "full \(Int(full.width))×\(Int(full.height)), minimized \(Int(compact.width))×\(Int(compact.height)) (dock \(cLetter))"
+            + "; vertical full \(Int(verticalFull.width))×\(Int(verticalFull.height)), minimized \(Int(verticalCompact.width))×\(Int(verticalCompact.height))"
     }
 
     /// Removes the bar (and the shortcut cheat-sheet).
@@ -813,7 +818,9 @@ struct AnnotationToolbarView: View {
                 Divider()
                     .frame(height: 1)
 
-                ScreenScopeMenu(coordinator: coordinator)
+                // Icon-only so the screens' names beautify the popup menu
+                // instead of dictating this column's width.
+                ScreenScopeMenu(coordinator: coordinator, showsTitle: false)
 
                 RecordButton(
                     state: coordinator.recordingState,
@@ -884,13 +891,14 @@ struct AnnotationToolbarView: View {
                 Image(systemName: "lineweight")
                     .foregroundStyle(.white.opacity(0.7))
 
-                // Layout bounds stay unrotated: size the slider flat, spin
-                // it about its centre, then give the stack a tall, slim
-                // slot that matches the rotated visual.
-                Slider(value: $coordinator.settings.lineWidth, in: 1...24, step: 1)
-                    .frame(width: 110, height: 18)
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 24, height: 110)
+                // The horizontal layouts keep a real slider; here it was
+                // rotated -90° to stand up, but a rotated SwiftUI Slider's
+                // hit-testing does not follow the rotation, so drags
+                // registered at the wrong scale and the control earned
+                // reports of "it just won't go wider". Numbered taps
+                // survive rotation-free: up is thicker, down is thinner,
+                // and holding either repeats.
+                lineWidthStepper
 
                 VStack(spacing: 6) {
                     drawingModeChip
@@ -1164,6 +1172,40 @@ struct AnnotationToolbarView: View {
         }
     }
 
+    /// The line-width control for the vertical bar's narrow column:
+    /// two press-and-hold step buttons around the current width. Holding
+    /// the button repeats (`.buttonRepeatBehavior`), so scrubbing from 1
+    /// to 24 stays one gesture, and the number always names the value
+    /// actually applied.
+    private var lineWidthStepper: some View {
+        VStack(spacing: 4) {
+            AnnotationControlButton(
+                systemImage: "chevron.up",
+                help: L10n.tr("Increase line width")
+            ) {
+                coordinator.settings.lineWidth = min(
+                    24, coordinator.settings.lineWidth + 1
+                )
+            }
+            .buttonRepeatBehavior(.enabled)
+
+            Text("\(Int(coordinator.settings.lineWidth))")
+                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(minWidth: 22)
+
+            AnnotationControlButton(
+                systemImage: "chevron.down",
+                help: L10n.tr("Decrease line width")
+            ) {
+                coordinator.settings.lineWidth = max(
+                    1, coordinator.settings.lineWidth - 1
+                )
+            }
+            .buttonRepeatBehavior(.enabled)
+        }
+    }
+
     private var finishButton: some View {
         Button {
             Task { await coordinator.toggleAnnotationMode() }
@@ -1179,6 +1221,7 @@ struct AnnotationToolbarView: View {
         .help(L10n.tr("Finish annotating"))
     }
 }
+
 
 /// One of the round tool buttons at the left of the bar.
 private struct ToolButton: View {
@@ -1237,9 +1280,15 @@ private struct EffectButton: View {
 /// The pill shows the active choice — "All screens" or the chosen screen's
 /// localized name — and the menu lists whatever displays are attached at
 /// that moment. `screensEpoch` is read here so displays plugged in or out
-/// mid-session refresh the list without any manual reopen.
+/// mid-session refresh the list without any manual reopen. In the compact
+/// variant (the side docks' narrow column) the pill is icon-only and the
+/// names live only in the popup menu and the tooltip, so a long monitor
+/// name can no longer dictate the bar's width.
 private struct ScreenScopeMenu: View {
     @ObservedObject var coordinator: AppCoordinator
+    /// `false` renders the label as an icon tile (the vertical layout);
+    /// the screens' names still show in the menu itself.
+    var showsTitle: Bool = true
 
     var body: some View {
         Menu {
@@ -1256,29 +1305,48 @@ private struct ScreenScopeMenu: View {
                 }
             }
         } label: {
-            HStack(spacing: 3) {
+            if showsTitle {
+                HStack(spacing: 3) {
+                    Image(systemName: coordinator.presentationScope.screenName == nil
+                        ? "rectangle.on.rectangle"
+                        : "display")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(title)
+                        .font(.system(size: 10, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .foregroundStyle(isScopedToOneScreen ? Color.white : Color.white.opacity(0.9))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 7).fill(
+                        isScopedToOneScreen
+                            ? AnyShapeStyle(Color.accentColor.opacity(0.85))
+                            : AnyShapeStyle(Color.white.opacity(0.08))
+                    )
+                )
+            } else {
                 Image(systemName: coordinator.presentationScope.screenName == nil
                     ? "rectangle.on.rectangle"
                     : "display")
-                    .font(.system(size: 12, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(
+                        isScopedToOneScreen ? AnyShapeStyle(Color.white) : AnyShapeStyle(
+                            Color.white.opacity(0.9))
+                    )
+                    .frame(width: 32, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7).fill(
+                            isScopedToOneScreen
+                                ? AnyShapeStyle(Color.accentColor.opacity(0.85))
+                                : AnyShapeStyle(Color.white.opacity(0.08))
+                        )
+                    )
             }
-            .foregroundStyle(isScopedToOneScreen ? Color.white : Color.white.opacity(0.9))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 7).fill(
-                    isScopedToOneScreen
-                        ? AnyShapeStyle(Color.accentColor.opacity(0.85))
-                        : AnyShapeStyle(Color.white.opacity(0.08))
-                )
-            )
         }
         .menuStyle(.button)
-        .menuIndicator(.visible)
+        .menuIndicator(showsTitle ? .visible : .hidden)
         .fixedSize()
         .help(L10n.tr("Choose which screens the annotation overlay covers"))
     }
@@ -1361,6 +1429,7 @@ private struct RecordButton: View {
                         .font(.system(size: 10, weight: .semibold))
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .frame(maxWidth: 120)
                         .foregroundStyle(Color.green.opacity(0.95))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)

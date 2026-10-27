@@ -108,6 +108,8 @@ public enum L10n {
             "El lápiz está bloqueado: cada clic dibuja sobre la capa. Tocá de nuevo para volver a requerir la tecla de dibujo.",
         "Latch the pencil: draw with every click instead of holding the drawing key.":
             "Bloqueá el lápiz: dibujá con cada clic en vez de mantener la tecla de dibujo.",
+        "Increase line width": "Aumentar el grosor",
+        "Decrease line width": "Reducir el grosor",
 
         // Settings — tabs and tools.
         "General": "General",
