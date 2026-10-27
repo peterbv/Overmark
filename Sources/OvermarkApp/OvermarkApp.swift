@@ -241,6 +241,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 500_000_000)
             step("toolbar minimized again (default)")
 
+            // The measured sizes are what the bar windows get sized to:
+            // logging them keeps a drifting layout (one that outgrows
+            // its window and loses trailing tools) visible in the run.
+            if let sizes = coordinator.probeToolbarSizes() {
+                FileHandle.standardError.write(Data(
+                    "[PROBE] toolbar sizes: \(sizes)\n".utf8
+                ))
+            }
+
             // The configurable lens exercises the in-place update path:
             // resizing, then the quick refresh cadence, then mirroring (a
             // toggle the refresh loop starts pushing to other displays on

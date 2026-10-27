@@ -25,6 +25,54 @@ final class AnnotationToolbarController {
     private static let compactBarSize = NSSize(width: 580, height: 60)
     private static let compactVerticalBarSize = NSSize(width: 84, height: 540)
 
+    /// Measured ideal sizes, keyed by layout variant. `dockRect` has to
+    /// know the size before the hosting view exists, so each variant is
+    /// measured once — a throwaway hosting view reports its
+    /// `intrinsicContentSize`, the SwiftUI ideal, independent of any
+    /// frame — and cached; later calls reuse it without laying out.
+    private var measuredSizes: [SizeKey: NSSize] = [:]
+
+    private struct SizeKey: Hashable {
+        let vertical: Bool
+        let minimized: Bool
+    }
+
+    /// The size the window must be to hold the given layout: measured
+    /// from the SwiftUI content itself, with the designed constants as
+    /// a floor. Measuring fixes the class of bugs where the layout
+    /// gains a control and a frozen constant silently trims it off the
+    /// window edge — the expanded bar kept losing its trailing tools
+    /// that way.
+    private func layoutSize(vertical: Bool, minimized: Bool) -> NSSize {
+        let key = SizeKey(vertical: vertical, minimized: minimized)
+        if let measured = measuredSizes[key] {
+            return measured
+        }
+
+        let probe = hosting(isVertical: vertical, isMinimized: minimized)
+        probe.sizingOptions = .intrinsicContentSize
+        let ideal = probe.intrinsicContentSize
+        let floor = Self.floorSize(vertical: vertical, minimized: minimized)
+        let size = NSSize(
+            width: max(ideal.width, floor.width),
+            height: max(ideal.height, floor.height)
+        )
+        measuredSizes[key] = size
+        return size
+    }
+
+    /// The designed minimum for each layout — the old frozen constants
+    /// stay only as a floor, so a measure quirk (an odd ideal of `-1` or
+    /// a metric hiccup) can never shrink a bar below a sane row.
+    private static func floorSize(vertical: Bool, minimized: Bool) -> NSSize {
+        switch (vertical, minimized) {
+        case (true, true): return compactVerticalBarSize
+        case (true, false): return verticalBarSize
+        case (false, true): return compactBarSize
+        case (false, false): return barSize
+        }
+    }
+
     private let coordinator: AppCoordinator
     private var panel: OverlayPanel?
 
@@ -84,6 +132,18 @@ final class AnnotationToolbarController {
             numbers.append(number)
         }
         return numbers
+    }
+
+    /// Headless probe summary: the measured sizes for the full and the
+    /// minimized layout of the current dock orientation — the sizes the
+    /// windows are sized to. A drift (a layout outgrowing its window
+    /// again) shows up right here in the probe transcript.
+    func probeSummary() -> String {
+        let vertical = !coordinator.toolbarDock.isHorizontal
+        let full = layoutSize(vertical: vertical, minimized: false)
+        let compact = layoutSize(vertical: vertical, minimized: true)
+        return "full \(Int(full.width))×\(Int(full.height))"
+            + ", minimized \(Int(compact.width))×\(Int(compact.height))"
     }
 
     /// Removes the bar (and the shortcut cheat-sheet).
@@ -160,30 +220,35 @@ final class AnnotationToolbarController {
     /// of the menu bar (top), the Dock (bottom) and the screen edges
     /// (sides).
     private func dockRect(for screen: NSScreen) -> NSRect {
-        let horizontal = coordinator.toolbarDock.isHorizontal
-        let size: NSSize
-        if isMinimizedMode {
-            size = horizontal ? Self.compactBarSize : Self.compactVerticalBarSize
-        } else {
-            size = horizontal ? Self.barSize : Self.verticalBarSize
-        }
+        let size = layoutSize(
+            vertical: !coordinator.toolbarDock.isHorizontal,
+            minimized: isMinimizedMode
+        )
+        // A measured layout can outgrow a small display: cap it to the
+        // visible frame so the bar still fits between menu bar and Dock
+        // instead of poking out the other edge.
+        let visible = screen.visibleFrame
+        let capped = NSSize(
+            width: min(size.width, visible.width - 24),
+            height: min(size.height, visible.height - 24)
+        )
         let frame = screen.frame
         let menuBarHeight = max(frame.height - screen.visibleFrame.height, 0)
         let margin: CGFloat = 12
         switch coordinator.toolbarDock {
         case .top:
             return NSRect(
-                x: frame.midX - size.width / 2,
-                y: frame.maxY - menuBarHeight - size.height - margin,
-                width: size.width,
-                height: size.height
+                x: frame.midX - capped.width / 2,
+                y: frame.maxY - menuBarHeight - capped.height - margin,
+                width: capped.width,
+                height: capped.height
             )
         case .bottom:
             return NSRect(
-                x: frame.midX - size.width / 2,
+                x: frame.midX - capped.width / 2,
                 y: screen.visibleFrame.minY + margin,
-                width: size.width,
-                height: size.height
+                width: capped.width,
+                height: capped.height
             )
         case .leading:
             return NSRect(
@@ -192,20 +257,20 @@ final class AnnotationToolbarController {
                 // area: clamp it inside the visible frame.
                 y: max(
                     screen.visibleFrame.minY + margin,
-                    frame.minY + (frame.height - size.height) / 2
+                    frame.minY + (frame.height - capped.height) / 2
                 ),
-                width: size.width,
-                height: size.height
+                width: capped.width,
+                height: capped.height
             )
         case .trailing:
             return NSRect(
-                x: frame.maxX - size.width - margin,
+                x: frame.maxX - capped.width - margin,
                 y: max(
                     screen.visibleFrame.minY + margin,
-                    frame.minY + (frame.height - size.height) / 2
+                    frame.minY + (frame.height - capped.height) / 2
                 ),
-                width: size.width,
-                height: size.height
+                width: capped.width,
+                height: capped.height
             )
         }
     }

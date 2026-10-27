@@ -739,6 +739,13 @@ public final class AppCoordinator: ObservableObject {
         toolbar?.toggleMinimized()
     }
 
+    /// Headless probe support: the floating bar's measured layout sizes,
+    /// so a probe run logs whether the windows still hold their content
+    /// (a frozen constant once clipped the expanded bar).
+    public func probeToolbarSizes() -> String? {
+        toolbar?.probeSummary()
+    }
+
     /// Applies edits (moves, recolors) to specific annotations as one undo
     /// step.
     public func applyAnnotationEdits(_ edits: [Annotation]) {
