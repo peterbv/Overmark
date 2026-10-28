@@ -39,16 +39,42 @@ enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
 /// It hosts the tool palette, the colour choices and the cursor effect
 /// toggles. Everything here is written straight into the coordinator, which
 /// pushes the values to the live overlay.
+///
+/// The width stays designed at 560 pt, but the height is not fixed: the
+/// window sizes itself to the measured content (via
+/// `NSHostingSizingOptions.preferredContentSize`), so a pane that gains a
+/// control across rounds cannot be silently clipped by a frozen constant —
+/// the same failure mode the floating toolbar had.
 struct SettingsView: View {
     @ObservedObject var coordinator: AppCoordinator
+    /// Pins the rendered tab to a fixed value, detached from the picker.
+    /// Thrown-away hosting views use it to measure each tab's ideal height
+    /// deterministically (the probe reports every tab's size).
+    var tabOverride: SettingsTab? = nil
     @State private var selectedTab: SettingsTab = .tools
 
     /// Tools whose annotations the renderer actually draws.
     private static let selectableTools = AnnotationTool.allCases.filter { $0.producesAnnotation }
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        if let pinned = tabOverride {
+            tabContent(pinned, selection: .constant(pinned))
+        } else {
+            tabContent(selectedTab, selection: $selectedTab)
+        }
+    }
+
+    /// The tab strip above the active pane. The pane follows the bound
+    /// value — not the `selectedTab` state — so a pinned measurement and a
+    /// live window render the pane they claim to. The pane scrolls: the
+    /// window clamps its height to the screen, and a pane taller than that
+    /// (the cursor tab measures ~1300 pt of controls) has to be reachable.
+    @ViewBuilder private func tabContent(
+        _ tab: SettingsTab,
+        selection: Binding<SettingsTab>
+    ) -> some View {
         VStack(spacing: 0) {
-            Picker("", selection: $selectedTab) {
+            Picker("", selection: selection) {
                 ForEach(SettingsTab.allCases) { tab in
                     Text(tab.title).tag(tab)
                 }
@@ -58,13 +84,16 @@ struct SettingsView: View {
             .padding(.horizontal, 14)
             .padding(.top, 12)
 
-            selectedPane
+            ScrollView {
+                pane(for: tab)
+                    .padding(.bottom, 10)
+            }
         }
-        .frame(width: 560, height: 460)
+        .frame(width: 560)
     }
 
-    @ViewBuilder private var selectedPane: some View {
-        switch selectedTab {
+    @ViewBuilder private func pane(for tab: SettingsTab) -> some View {
+        switch tab {
         case .tools: toolSettings
         case .cursor: cursorSettings
         case .general: generalSettings
