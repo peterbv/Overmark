@@ -518,6 +518,24 @@ presentaciones, sin congelar el escritorio.
     h); vertical full 202×700, minimized 91×540`. Horizontal sin cambios;
     métricas intactas (163 + 24).
 
+36. Fix reportado por el owner: la ventana de **Preferencias** "no se
+    acomoda bien" — misma clase de bug que la barra de la ronda #34: la
+    ventana estaba congelada a 560×460 mientras cada ronda le agregaba
+    controles (lupa configurable, láser, objetivo de grabación,
+    documentos, atajos…). Medido de verdad, el tab de cursor pide
+    **~1348 pt de alto** — casi toda la altura de una pantalla — y en la
+    ventana fija quedaba recortado o con doble scroll. Fix de dos capas:
+    (1) el alto se **mide del contenido por tab** (hosting de tanteo con
+    `tabOverride` fijo — ancho fijo en 560, alto ideal); (2) un delegado
+    `SettingsSizer` re-mide en cada update de la ventana (cambio de tab y
+    de idioma incluidos), aplica un piso de 420 y un **tope del
+    `visibleFrame`** — sobre el tope la pane scrollea adentro (los `Form`
+    no scrollean solos) — y crece hacia abajo con el **título anclado**.
+    La sonda imprime las 6 tabs con ideal y tope: `tools 560×773, cursor
+    560×1010 (ideal 1348), general 560×729, documents 560×420, shortcuts
+    560×767, permissions 560×420` — el mismo drift queda visible en
+    cualquier ronda. Métricas intactas (163 + 24).
+
 `swift build` limpio · `swift test` verde: **163** pruebas Swift Testing (24 suites, incluida
 "Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
 ventana y mapeo por frame incluidos). Cada ronda corre una sonda

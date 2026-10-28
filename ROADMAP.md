@@ -96,6 +96,18 @@
 
 ## Registro de decisiones
 
+- **27 oct 2026** — **Fix: la ventana de Preferencias se ajusta a su
+  contenido** (lo reportó el owner: "el menú de ajustes no se acomoda
+  bien" — mismo bug de clase que la barra de #34: tamaño congelado
+  560×460 mientras las rondas sumaban controles; la tab de cursor pide
+  ~1348 pt, más alto que la pantalla). Ahora el alto se **mide del
+  contenido por tab** (hosting de tanteo con `tabOverride`, ancho fijo
+  560) y un delegado `SettingsSizer` re-mide en cada update (cambios de
+  tab o idioma incluidos): piso de 420, **tope del visibleFrame** con
+  scroll interno sobre el tope (los `Form` no scrollean solos) y el
+  marco crece hacia abajo con el título anclado. La sonda reporta las
+  6 tabs ideal vs tope (`cursor 560×1010 (ideal 1348)`).
+
 - **26 oct 2026** — **#35 hecho: grosor manejable y barra vertical más
   angosta** (dos pedidos del owner sobre la barra en vertical: el control
   "simplemente no deja aumentar el ancho" y el select de pantallas que se
