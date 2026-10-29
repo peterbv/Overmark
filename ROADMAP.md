@@ -96,6 +96,27 @@
 
 ## Registro de decisiones
 
+- **28 oct 2026** — **#37 hecho: quick-wins de la deuda del review** (el
+  owner eligió arrancar con la lista conocida). (1) **Fade seguro**:
+  cortar el auto-borrado a mitad (o apagar la preferencia mientras corre)
+  antes dejaba el sello estirado a opacidad parcial para siempre — ahora
+  se restaura a 1 y recién ahí se detiene. (2) **Errores de disco
+  visibles**: persistAutosave/save/delete pasaron de `try?` silencioso a
+  do/catch que sube el mensaje a la barra de estado ("No se pudo escribir
+  el autoguardado — revisá el espacio libre en disco."), coherente con la
+  promesa de "nunca perder el trabajo". (3) **Menú undo/redo honesto**:
+  `autoenablesItems = false` (los `isEnabled` manuales ya no los pisa la
+  validación automática de NSMenu). (4) **Monitores gemelos resueltos**:
+  dos pantallas idénticas ya no colisionan en el alcance de anotación —
+  `ScreenChoice` (Core) guarda `"Nombre (3840×2160)"` cuando el nombre se
+  repite y `"Nombre #N"` para gemelos de píxeles idénticos; resolver lee
+  nombre → píxeles → índice, con fallback retro-compatible al valor plano
+  viejo. Nueva suite "Screen choice" (8 tests). (5) Limpieza de estilo:
+  `audioInput!` → `guard let` y realineación de L10n. Métricas: 171
+  pruebas en 25 suites + 24 XCTest. Quedan en deuda: M4 (mapeo
+  multi-monitor), M7 (una sola enumeración de pantallas por captura), M6
+  (invalidación por dirty-rect, al final por riesgo).
+
 - **27 oct 2026** — **Fix: la ventana de Preferencias se ajusta a su
   contenido** (lo reportó el owner: "el menú de ajustes no se acomoda
   bien" — mismo bug de clase que la barra de #34: tamaño congelado

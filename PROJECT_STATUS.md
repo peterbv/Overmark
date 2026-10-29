@@ -536,9 +536,30 @@ presentaciones, sin congelar el escritorio.
     560×767, permissions 560×420` — el mismo drift queda visible en
     cualquier ronda. Métricas intactas (163 + 24).
 
-`swift build` limpio · `swift test` verde: **163** pruebas Swift Testing (24 suites, incluida
-"Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov` real; geometría de
-ventana y mapeo por frame incluidos). Cada ronda corre una sonda
+37. Ronda de quick-wins de la deuda de la revisión externa (el owner
+    dijo "podemos continuar con la deuda"): (1) el **auto-borrado ya no
+    deja sellos a medio desvanecer** — cortar el fade (o apagar la
+    preferencia a mitad) devuelve la opacidad a 1 en vez de estirar un
+    stamp al 40%; (2) los **fallos de disco ya no callan**: autoguardar,
+    guardar y eliminar documentos hacen `do/catch` y suben el error a la
+    barra ("No se pudo escribir el autoguardado — revisá el espacio libre
+    en disco." etc) en lugar de un `try?` silencioso; (3) el menú
+    undo/redo es **honesto**: `autoenablesItems = false` para que los
+    `isEnabled` manuales valgan de verdad; (4) **monitores gemelos**:
+    dos pantallas del mismo modelo ya no comparten una sola opción en el
+    alcance/anclaje de anotación — Core nuevo `ScreenChoice` guarda un
+    valor calificado (`"BenQ (3840×2160)"` cuando el nombre se repite;
+    los gemelos idénticos se destinguen con `" #N`") y resuelve contra la
+    lista viva por nombre, luego por píxeles, con fallback al primero
+    (retro-compatible con los valores planos viejos); labels `#N` solo
+    para gemelos idénticos; 8 tests nuevos de la suite "Screen choice";
+    (5) `audioInput!` post-guard → `guard let` (RecorderPipeline) y dos
+    realineaciones cosméticas de L10n. Métricas: **171** pruebas (25
+    suites) + 24 XCTest.
+
+`swift build` limpio · `swift test` verde: **171** pruebas Swift Testing (25 suites, incluida
+"Screen choice" y "Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov`
+real; geometría de ventana y mapeo por frame incluidos). Cada ronda corre una sonda
 (OVERMARK_PROBE=1) que ejercita el flujo completo headless.
 
 ## Cómo construir y correr
