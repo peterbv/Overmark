@@ -55,7 +55,7 @@ public final class MenuBarController {
     ///     whiteboard entry shows it with a checkmark.
     ///   - isFreeze: Whether the screen still is up; the freeze entry shows
     ///     it with a checkmark.
-    ///   - screenNames: The attached screens, for the annotation submenu.
+    ///   - screenChoices: The attached screens, for the annotation submenu.
     ///   - canUndo: Whether an undo step is available.
     ///   - canRedo: Whether a redo step is available.
     public func update(
@@ -64,7 +64,7 @@ public final class MenuBarController {
         scope: PresentationScope = .all,
         isWhiteboard: Bool = false,
         isFreeze: Bool = false,
-        screenNames: [String] = [],
+        screenChoices: [ScreenChoiceRow] = [],
         canUndo: Bool,
         canRedo: Bool
     ) {
@@ -75,7 +75,7 @@ public final class MenuBarController {
             scope: scope,
             isWhiteboard: isWhiteboard,
             isFreeze: isFreeze,
-            screenNames: screenNames,
+            screenChoices: screenChoices,
             canUndo: canUndo,
             canRedo: canRedo
         )
@@ -97,11 +97,16 @@ public final class MenuBarController {
         scope: PresentationScope = .all,
         isWhiteboard: Bool = false,
         isFreeze: Bool = false,
-        screenNames: [String] = [],
+        screenChoices: [ScreenChoiceRow] = [],
         canUndo: Bool = false,
         canRedo: Bool = false
     ) -> NSMenu {
         let menu = NSMenu()
+        // Items carry hand-managed state in this menu (undo/redo
+        // availability, the checkmarks). With auto-enabling left on, NSMenu
+        // validation overrides every manual `isEnabled`, so disabled items
+        // like undo-at-empty-history still looked clickable and no-oped.
+        menu.autoenablesItems = false
 
         let toggle = NSMenuItem(
             title: mode == .idle ? L10n.tr("Start Annotating") : L10n.tr("Stop Annotating"),
@@ -142,15 +147,15 @@ public final class MenuBarController {
             allScreens.target = self
             allScreens.state = scope.screenName == nil ? .on : .off
             scopeMenu.addItem(allScreens)
-            for name in screenNames {
+            for row in screenChoices {
                 let item = NSMenuItem(
-                    title: name,
+                    title: row.label,
                     action: #selector(handleScopeNamed(_:)),
                     keyEquivalent: ""
                 )
                 item.target = self
-                item.representedObject = name
-                item.state = name == scope.screenName ? .on : .off
+                item.representedObject = row.value
+                item.state = row.value == scope.screenName ? .on : .off
                 scopeMenu.addItem(item)
             }
             scopeItem.submenu = scopeMenu

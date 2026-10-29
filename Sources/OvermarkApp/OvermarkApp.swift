@@ -387,7 +387,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             scope: coordinator.presentationScope,
             isWhiteboard: coordinator.isWhiteboardActive,
             isFreeze: coordinator.isFreezeActive,
-            screenNames: coordinator.screenNames,
+            screenChoices: coordinator.screenChoices,
             canUndo: coordinator.document.canUndo,
             canRedo: coordinator.document.canRedo
         )

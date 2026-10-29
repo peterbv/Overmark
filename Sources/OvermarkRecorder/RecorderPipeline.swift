@@ -239,7 +239,7 @@ final class RecorderPipeline: @unchecked Sendable {
     }
 
     private func appendAudio(_ frame: AudioFrame) {
-        guard audioInput != nil else { return }
+        guard let audioInput else { return }
         let sampleBuffer = frame.sampleBuffer
 
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
@@ -258,11 +258,11 @@ final class RecorderPipeline: @unchecked Sendable {
             audioBuffersDropped += 1
             return
         }
-        guard audioInput!.isReadyForMoreMediaData else {
+        guard audioInput.isReadyForMoreMediaData else {
             audioBuffersDropped += 1
             return
         }
-        if audioInput!.append(sampleBuffer) {
+        if audioInput.append(sampleBuffer) {
             audioBuffersAppended += 1
             lastAudioTime = time
             firstTime = firstTime ?? time

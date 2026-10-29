@@ -515,7 +515,14 @@ public final class AppCoordinator: ObservableObject {
             screens: screenFrames(),
             annotations: document.annotations
         )
-        try? SessionArchive.autosaveSnapshot(snapshot)
+        do {
+            try SessionArchive.autosaveSnapshot(snapshot)
+        } catch {
+            // A failed autosave is exactly the moment the promise "never
+            // lose your work" must speak up: a full disk or an unwritable
+            // container can't keep replaying silently forever.
+            lastError = L10n.tr("Couldn't write the autosave — check free disk space.")
+        }
     }
 
     /// Captures the current display layout as global AppKit frames.
@@ -542,7 +549,11 @@ public final class AppCoordinator: ObservableObject {
             screens: screenFrames(),
             annotations: document.annotations
         )
-        _ = try? SessionArchive.saveSnapshot(snapshot, name: name)
+        do {
+            _ = try SessionArchive.saveSnapshot(snapshot, name: name)
+        } catch {
+            lastError = L10n.tr("Couldn't save the document — check free disk space.")
+        }
         reloadSavedDocuments()
     }
 
@@ -560,7 +571,11 @@ public final class AppCoordinator: ObservableObject {
 
     /// Removes a document from the archive and refreshes the list.
     public func deleteSavedDocument(_ entry: SessionArchive.Entry) {
-        try? SessionArchive.deleteSnapshot(named: entry.name)
+        do {
+            try SessionArchive.deleteSnapshot(named: entry.name)
+        } catch {
+            lastError = L10n.tr("Couldn't delete the saved document.")
+        }
         reloadSavedDocuments()
     }
 
@@ -845,13 +860,27 @@ public final class AppCoordinator: ObservableObject {
     }
 
     /// The localized names of the attached screens, for the scope picker.
-    /// Duplicate names (two identical monitors) collapse to one entry:
-    /// picking it annotates the first matching screen.
-    public var screenNames: [String] {
-        var seen = Set<String>()
-        return NSScreen.screens.compactMap {
-            seen.insert($0.localizedName).inserted ? $0.localizedName : nil
+    /// The screens that exist right now as stored-choice candidates: name
+    /// plus pixel size — the pair the UI shows and the stored values lean on.
+    ///
+    /// `NSScreen` arrives in display order; every resolution site pairs its
+    /// results back to the screens by that same order.
+    static func screenCandidates(_ screens: [NSScreen]) -> [ScreenCandidate] {
+        screens.map { screen in
+            ScreenCandidate(
+                name: screen.localizedName,
+                pixelWidth: Int((screen.frame.width * screen.backingScaleFactor).rounded()),
+                pixelHeight: Int((screen.frame.height * screen.backingScaleFactor).rounded())
+            )
         }
+    }
+
+    /// The screens as the menus and pickers see them: every screen gets its
+    /// own row — twinned localized names are qualified (and identical twins
+    /// ordinated in the label) so each screen is a distinct, resolvable
+    /// choice instead of collapsing to the first.
+    public var screenChoices: [ScreenChoiceRow] {
+        ScreenChoiceRows.rows(from: NSScreen.screens)
     }
 
     /// Rebuilds the overlays for the current scope while presenting.
@@ -876,8 +905,10 @@ public final class AppCoordinator: ObservableObject {
     private func allowedOverlayDisplayIDs() -> Set<CGDirectDisplayID>? {
         guard let name = presentationScope.screenName else { return nil }
         let screens = NSScreen.screens
-        if let match = screens.first(where: { $0.localizedName == name }),
-           let displayID = Self.displayID(of: match) {
+        let candidates = Self.screenCandidates(screens)
+        if let candidate = ScreenChoice.matchingCandidate(forStored: name, in: candidates),
+           let index = candidates.firstIndex(where: { $0 == candidate }),
+           let displayID = Self.displayID(of: screens[index]) {
             return [displayID]
         }
         lastError = L10n.tr(
@@ -1372,22 +1403,40 @@ public final class AppCoordinator: ObservableObject {
     /// stays reserved for the actions the user actually took. Each step
     /// re-reads the annotation, so anything that happens in flight — an
     /// undo, a manual delete, an edit — is respected and quietly ends the
-    /// fade; turning the setting off mid-fade abandons the fade too.
+    /// fade; turning the setting off mid-fade abandons the fade too, and
+    /// returns the annotation's opacity to 1 first: an abandoned fade must
+    /// not leave a half-faded stamp stranded at, say, 0.4.
     private func fadeOut(id: Annotation.ID) {
         Task { @MainActor [weak self] in
             let steps = 5
             for _ in 0..<steps {
                 guard let self,
-                      self.settings.autoFadeSeconds > 0,
                       let current = self.document.annotations.first(where: { $0.id == id })
                 else { return }
+                guard self.settings.autoFadeSeconds > 0 else {
+                    var restored = current
+                    restored.opacity = 1
+                    self.document.update(restored, recordHistory: false)
+                    return
+                }
 
                 var fading = current
                 fading.opacity = max(fading.opacity - 1 / Double(steps), 0)
                 self.document.update(fading, recordHistory: false)
                 try? await Task.sleep(nanoseconds: 120_000_000)
             }
-            guard let self, self.settings.autoFadeSeconds > 0 else { return }
+            guard let self else { return }
+            guard self.settings.autoFadeSeconds > 0 else {
+                // The setting went off during the very last steps: give the
+                // (invisible-by-now) annotation its opacity back instead of
+                // leaving a phantom stamp at 0.
+                if let current = self.document.annotations.first(where: { $0.id == id }) {
+                    var restored = current
+                    restored.opacity = 1
+                    self.document.update(restored, recordHistory: false)
+                }
+                return
+            }
             // Capture the stamp before it leaves the document: fades can
             // remove the stamp holding the highest issued number, and the
             // floor keeps the counter from reissuing that number later.
@@ -1627,10 +1676,11 @@ public final class AppCoordinator: ObservableObject {
             guard screens.count > 1 else {
                 return (CGMainDisplayID(), nil)
             }
-            if let screen = screens.first(where: { $0.localizedName == name }) {
-                if let value = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
-                    return (value.uint32Value, nil)
-                }
+            let candidates = Self.screenCandidates(screens)
+            if let candidate = ScreenChoice.matchingCandidate(forStored: name, in: candidates),
+               let index = candidates.firstIndex(where: { $0 == candidate }),
+               let value = screens[index].deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+                return (value.uint32Value, nil)
             }
             // The chosen screen is unplugged or was renamed: the
             // presentation still needs its video, so the main display

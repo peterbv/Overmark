@@ -1297,11 +1297,11 @@ private struct ScreenScopeMenu: View {
             } label: {
                 Label(L10n.tr("All screens"), systemImage: "rectangle.on.rectangle")
             }
-            ForEach(coordinator.screenNames, id: \.self) { name in
+            ForEach(coordinator.screenChoices) { row in
                 Button {
-                    coordinator.setPresentationScope(.onlyScreen(name))
+                    coordinator.setPresentationScope(.onlyScreen(row.value))
                 } label: {
-                    Label(name, systemImage: "display")
+                    Label(row.label, systemImage: "display")
                 }
             }
         } label: {

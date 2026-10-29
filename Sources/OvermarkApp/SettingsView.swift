@@ -451,8 +451,8 @@ struct SettingsView: View {
             Picker(L10n.tr("Recording screen"), selection: recordingScreenBinding) {
                 Text(L10n.tr("Main display")).tag(String?.none)
 
-                ForEach(currentScreenOptions, id: \.id) { option in
-                    Text(option.label).tag(String?.some(option.id))
+                ForEach(currentScreenOptions) { option in
+                    Text(option.label).tag(String?.some(option.value))
                 }
 
                 if let stale = staleRecordingName {
@@ -589,20 +589,13 @@ struct SettingsView: View {
         )
     }
 
-    /// The screens that exist right now, named; identical names (two
-    /// identical monitors) gain their pixel size to stay distinguishable.
-    private var currentScreenOptions: [(id: String, label: String)] {
-        let screens = NSScreen.screens
-        return screens.map { screen in
-            let name = screen.localizedName
-            let twins = screens.filter { $0.localizedName == name }
-            guard twins.count > 1 else {
-                return (id: name, label: name)
-            }
-            let width = Int((screen.frame.width * screen.backingScaleFactor).rounded())
-            let height = Int((screen.frame.height * screen.backingScaleFactor).rounded())
-            return (id: name, label: "\(name) (\(width)×\(height))")
-        }
+    /// The screens that exist right now, as stored-choice rows: every
+    /// screen keeps its own entry — a twinned localized name is qualified
+    /// with its pixel size (and an ordinal for identical twins in the
+    /// label), so the picker rows and their ids stay distinct and the
+    /// persisted value resolves afterwards.
+    private var currentScreenOptions: [ScreenChoiceRow] {
+        ScreenChoiceRows.rows(from: NSScreen.screens)
     }
 
     /// A chosen screen that no longer matches any connected screen: shown
@@ -612,7 +605,10 @@ struct SettingsView: View {
         guard case .namedScreen(let name) = coordinator.recorderSettings.displayChoice else {
             return nil
         }
-        return NSScreen.screens.contains { $0.localizedName == name } ? nil : name
+        return ScreenChoice.matchingCandidate(
+            forStored: name,
+            in: AppCoordinator.screenCandidates(NSScreen.screens)
+        ) == nil ? name : nil
     }
 
     /// The picker label of a language. Language names are shown in their own

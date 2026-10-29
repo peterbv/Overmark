@@ -100,7 +100,7 @@ public enum L10n {
         "Right-click deletes an annotation": "Clic derecho borra una anotación",
         "The overlay captures every click until Accessibility is granted (System Settings → Privacy & security → Accessibility). Press here to open it.":
             "El overlay captura todos los clics hasta que concedas Accesibilidad (Ajustes del Sistema → Privacidad y seguridad → Accesibilidad). Toca aquí para abrirla.",
-            "The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here to require the drawing key again.":
+        "The overlay captures every click by choice. Pause (⌘⇧S) to interact with other apps, or tap here to require the drawing key again.":
             "La capa captura todos los clics por elección. Usá pausa (⌘⇧S) para interactuar con otras apps, o tocá acá para volver a requerir la tecla de dibujo.",
         "While this chip is up, only clicks with the drawing key (⌥, ⌃ or ⌘) held draw on the overlay; every other click reaches the app underneath.":
             "Con el chip activo, solo los clics con la tecla de dibujo (⌥, ⌃ o ⌘) mantenida dibujan sobre la capa; los demás clics van a la app que está debajo.",
@@ -290,6 +290,12 @@ public enum L10n {
         "Everything you draw is kept in an autosave and comes back when you open Overmark again.":
             "Todo lo que dibujas queda en un autoguardado y reaparece la próxima vez que abras Overmark.",
         "Autosave": "Autoguardado",
+        "Couldn't write the autosave — check free disk space.":
+            "No se pudo escribir el autoguardado — revisá el espacio libre en disco.",
+        "Couldn't save the document — check free disk space.":
+            "No se pudo guardar el documento — revisá el espacio libre en disco.",
+        "Couldn't delete the saved document.":
+            "No se pudo eliminar el documento guardado.",
         "The canvas is empty.": "El lienzo está vacío.",
         "Save Session…": "Guardar sesión…",
         "Save the current session": "Guardar la sesión actual",
