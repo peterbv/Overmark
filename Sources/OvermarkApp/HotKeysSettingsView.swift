@@ -7,8 +7,9 @@ import OvermarkHotkeys
 ///
 /// Lists every action with its current system-wide combination and lets the
 /// user record a new one: after pressing "Change", the next keystroke is
-/// captured through a local monitor (which swallows those events) and either
-/// becomes the new binding or explains why it was rejected. ⎋ cancels.
+/// observed through a local monitor and either becomes the new binding,
+/// rejects a reserved or conflicting combination, or passes through when it
+/// belongs to the app's own menu. ⎋ cancels.
 struct HotKeysSettingsView: View {
     @ObservedObject var coordinator: AppCoordinator
 
@@ -81,8 +82,7 @@ struct HotKeysSettingsView: View {
         recordingAction = action
         message = nil
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            handleKeyDown(event)
-            return nil // consumed while the capture is armed
+            self.handleKeyDown(event)
         }
     }
 
@@ -94,21 +94,41 @@ struct HotKeysSettingsView: View {
         recordingAction = nil
     }
 
-    private func handleKeyDown(_ event: NSEvent) {
-        guard let action = recordingAction else { return }
+    /// Handles a key press while the capture is armed.
+    ///
+    /// - Returns: `nil` when the monitor consumed the event, or the event
+    ///   itself so it travels on to the responder chain. Reserved ⌘
+    ///   combinations (⌘Q, ⌘W, ⌘M, ⌘H) are never assignments: the monitor
+    ///   disarms and lets them reach the app menu, because swallowing them
+    ///   used to block quit, close, minimize and hide outright.
+    @discardableResult
+    private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
+        guard let action = recordingAction else { return event }
 
         // ⎋ always cancels instead of assigning itself.
         if event.keyCode == UInt16(kVK_Escape) {
             endRecording()
-            return
+            return nil // consumed
+        }
+
+        // Plain-⌘ menu accelerators pass through untouched. Comparing the
+        // flags through the device-independent mask keeps hardware-specific
+        // bits out of the equality, mirroring HotKeyManager's binding read.
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command, Self.reservedKeycodes.contains(event.keyCode) {
+            endRecording()
+            message = L10n.tr("That combination is reserved (⌘Q, ⌘W, ⌘M or ⌘H); the capture was cancelled.")
+            return event // to the app menu
         }
 
         // Bare modifier presses never form a binding; keep waiting.
-        guard let binding = HotKeyManager.binding(fromKeyDown: event) else { return }
+        guard let binding = HotKeyManager.binding(fromKeyDown: event) else {
+            return nil // consumed while the capture is armed
+        }
 
         guard HotKeyManager.isAcceptable(binding) else {
             message = L10n.tr("The combination must include ⌘")
-            return
+            return nil // consumed; still waiting for a valid one
         }
 
         if let conflict = coordinator.hotKeyConflict(for: binding, excluding: action) {
@@ -116,11 +136,21 @@ struct HotKeysSettingsView: View {
                 format: L10n.tr("Already used by %@"),
                 HotKeyLabels.name(for: conflict)
             )
-            return
+            return nil // consumed; conflict reported
         }
 
         coordinator.updateHotKeyBinding(action, binding: binding)
         endRecording()
         message = nil
+        return nil // consumed
     }
+
+    /// The keycodes whose plain-⌘ forms are the app's own accelerators:
+    /// quit, close, minimize and hide.
+    private static let reservedKeycodes: Set<UInt16> = [
+        UInt16(kVK_ANSI_Q),
+        UInt16(kVK_ANSI_W),
+        UInt16(kVK_ANSI_M),
+        UInt16(kVK_ANSI_H),
+    ]
 }

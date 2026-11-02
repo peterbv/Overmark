@@ -184,7 +184,8 @@ final class WindowRecordingSource: NSObject, SCStreamOutput, SCStreamDelegate, @
         // The AppKit global origin sits at the bottom-left of the primary
         // screen; ScreenCaptureKit (like `CGWindow` lists) counts from the
         // top-left, so the vertical axis mirrors around the primary height.
-        let primaryTop = NSScreen.screens.first?.frame.maxY ?? windowFrame.maxY
+        // The primary is resolved by its (0, 0) anchor, not by screen order.
+        let primaryTop = PrimaryScreen.screen?.frame.maxY ?? windowFrame.maxY
         let origin = CGPoint(
             x: windowFrame.origin.x,
             y: primaryTop - windowFrame.maxY

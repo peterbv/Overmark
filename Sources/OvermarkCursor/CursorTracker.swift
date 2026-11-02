@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import OvermarkCapture
 import OvermarkCore
 
 /// Tracks the global cursor position.
@@ -155,10 +156,10 @@ public final class CursorTracker {
     /// Quartz puts the origin at the top-left of the primary display; AppKit
     /// puts it at the bottom-left. The flip is relative to the primary
     /// display's height, which is what the global coordinate spaces differ by.
-    /// The primary display is the one anchored at (0, 0) — `NSScreen.screens`
-    /// makes no guarantee about which screen comes first.
+    /// The flip is defined by `PrimaryScreen.screen` — the display anchored
+    /// at (0, 0), not the first in `NSScreen.screens` order.
     static func toAppKitSpace(_ quartzPoint: CGPoint) -> Point {
-        guard let primary = NSScreen.screens.first(where: { $0.frame.origin == NSPoint(x: 0, y: 0) }) ?? NSScreen.screens.first else {
+        guard let primary = PrimaryScreen.screen else {
             return Point(x: Double(quartzPoint.x), y: Double(quartzPoint.y))
         }
         let primaryHeight = primary.frame.height

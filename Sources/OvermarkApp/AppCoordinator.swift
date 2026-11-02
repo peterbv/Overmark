@@ -801,9 +801,11 @@ public final class AppCoordinator: ObservableObject {
         }
         let displays = overlay.scopeDisplayIDs ?? Self.attachedDisplayIDs()
         var images: [CGDirectDisplayID: CGImage] = [:]
-        for displayID in displays {
-            if let snapshot = try? await captureService.capture(displayID: displayID) {
-                images[displayID] = snapshot.image
+        // One `SCShareableContent` pass for the whole batch: enumerating the
+        // shareable session per display is the expensive part of a capture.
+        if let snapshots = try? await captureService.capture(displayIDs: Array(displays)) {
+            for snapshot in snapshots {
+                images[snapshot.displayID] = snapshot.image
             }
         }
         guard !images.isEmpty else {

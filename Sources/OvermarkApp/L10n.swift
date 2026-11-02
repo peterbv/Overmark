@@ -94,6 +94,8 @@ public enum L10n {
         "The combination must include ⌘. ESC cancels the capture.":
             "La combinación debe incluir ⌘. ESC cancela la captura.",
         "Already used by %@": "Ya la usa %@",
+        "That combination is reserved (⌘Q, ⌘W, ⌘M or ⌘H); the capture was cancelled.":
+            "Esa combinación está reservada (⌘Q, ⌘W, ⌘M o ⌘H); se canceló la captura.",
         "Reset shortcuts": "Restaurar atajos",
         "Enter / end the presentation": "Entrar / terminar la presentación",
         "ESC always ends the presentation": "ESC siempre termina la presentación",

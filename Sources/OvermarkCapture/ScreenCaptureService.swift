@@ -76,14 +76,35 @@ public actor ScreenCaptureService {
     /// - Parameter displayID: The display to capture.
     /// - Returns: The captured image, or `nil` if the display has gone away.
     public func capture(displayID: CGDirectDisplayID) async throws -> DisplaySnapshot? {
-        guard let display = try await findDisplay(id: displayID) else {
-            return nil
-        }
+        // `SCShareableContent` can be expensive to enumerate (it snapshots
+        // every window in the session), so the display is looked up from the
+        // same content the exclusion list came from — one pass per capture.
         let content = try await SCShareableContent.excludingDesktopWindows(
             false,
             onScreenWindowsOnly: false
         )
+        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
+            return nil
+        }
         return try await capture(display, excludingWindows: ownWindows(in: content))
+    }
+
+    /// Captures several displays with a single content enumeration.
+    ///
+    /// The requested ids are matched against one pass of
+    /// `SCShareableContent`: displays that are no longer attached are
+    /// skipped, exactly as `capture(displayID:)` returns `nil` for them.
+    /// The order follows ScreenCaptureKit's display order.
+    public func capture(displayIDs: [CGDirectDisplayID]) async throws -> [DisplaySnapshot] {
+        guard !displayIDs.isEmpty else { return [] }
+        let content = try await SCShareableContent.excludingDesktopWindows(
+            false,
+            onScreenWindowsOnly: false
+        )
+        let excluded = ownWindows(in: content)
+        var pending = Set(displayIDs)
+        let displays = content.displays.filter { pending.remove($0.displayID) != nil }
+        return await snapshots(for: displays, excludingWindows: excluded)
     }
 
     /// Captures every attached display.
@@ -92,17 +113,31 @@ public actor ScreenCaptureService {
             false,
             onScreenWindowsOnly: false
         )
-        let excluded = ownWindows(in: content)
-        var snapshots: [DisplaySnapshot] = []
+        return await snapshots(
+            for: content.displays,
+            excludingWindows: ownWindows(in: content)
+        )
+    }
 
-        for display in content.displays {
+    // MARK: - Private
+
+    /// Captures each display, skipping the ones that fail.
+    ///
+    /// A display that drops out between enumeration and capture (unplugged
+    /// mid-call) must not fail the whole batch, so it is simply absent from
+    /// the result.
+    private func snapshots(
+        for displays: [SCDisplay],
+        excludingWindows excluded: [SCWindow]
+    ) async -> [DisplaySnapshot] {
+        var snapshots = [DisplaySnapshot]()
+        snapshots.reserveCapacity(displays.count)
+        for display in displays {
             guard let snapshot = try? await capture(display, excludingWindows: excluded) else { continue }
             snapshots.append(snapshot)
         }
         return snapshots
     }
-
-    // MARK: - Private
 
     /// Captures a single display.
     ///
@@ -141,14 +176,6 @@ public actor ScreenCaptureService {
         return content.windows.filter {
             $0.owningApplication?.bundleIdentifier == bundleID
         }
-    }
-
-    private func findDisplay(id: CGDirectDisplayID) async throws -> SCDisplay? {
-        let content = try await SCShareableContent.excludingDesktopWindows(
-            false,
-            onScreenWindowsOnly: false
-        )
-        return content.displays.first { $0.displayID == id }
     }
 
     /// Derives the geometry of a ScreenCaptureKit display.
