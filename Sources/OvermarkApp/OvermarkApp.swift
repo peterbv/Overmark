@@ -7,21 +7,29 @@ import SwiftUI
 /// Overmark is a menu bar app: it has no Dock icon and no main window. The
 /// annotation overlay and the cursor effects are drawn on top of whatever the
 /// user is presenting, and a small settings window is available on demand.
-@main
-struct OvermarkApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-
-    var body: some Scene {
-        Settings {
-            SettingsView(coordinator: delegate.coordinator)
-        }
-    }
-}
-
+///
 /// Wires the coordinator to the menu bar and manages the app lifecycle.
+///
+/// `@main` lives here with a hand-rolled bootstrap. A SwiftUI `App` struct
+/// used to own the entry point, but its only scene was a `Settings` scene —
+/// a window the delegate already builds itself (see `openSettings`) so it
+/// can float *above* the annotation overlays, which the scene system never
+/// allowed. Hosting the launch directly drops the dead scene and leaves
+/// every surface owner-managed.
+@main
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// The shared coordinator. Also reachable from the settings scene.
+    /// The process entry point. Installs the delegate and hands control to
+    /// `NSApplication`: every piece of real setup happens in
+    /// `applicationDidFinishLaunching`, exactly as before.
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.run()
+    }
+
+    /// The shared coordinator. Also reachable from the settings window.
     let coordinator = AppCoordinator()
 
     private var menuBar: MenuBarController?
