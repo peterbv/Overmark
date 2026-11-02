@@ -294,6 +294,47 @@ public final class AnnotationCanvasView: NSView {
         }
     }
 
+    // MARK: - Dirty rectangles
+
+    // Per-sample gesture updates do not repaint the whole canvas. Every
+    // gesture paints a bounded area — the growing stroke's hull bounds, the
+    // marquee rectangle, the moving group's copies — so the invalidated area
+    // is the union of where that area *was* and where it now is. The painter
+    // is deterministic on state (strokes are prefix-stable polylines,
+    // annotation records carry no transient styling, the board fill and the
+    // backdrop draw are uniform under clipping), so the untouched pixels
+    // inside a dirty rect re-derive to exactly what was already there.
+    // Structural changes (annotations committed, tool, board state) keep the
+    // full `needsDisplay` of their `didSet`s.
+
+    /// Repaints the union of the old and the new painted area of one
+    /// evolving region; a nil at both ends paints nothing.
+    private func markDirty(between old: Rect?, and new: Rect?, pad: Double) {
+        var rect: NSRect?
+        if let old {
+            rect = paintedRect(old, pad: pad)
+        }
+        if let new {
+            let fresh = paintedRect(new, pad: pad)
+            rect = rect?.union(fresh) ?? fresh
+        }
+        if let rect {
+            setNeedsDisplay(rect)
+        }
+    }
+
+    /// The view-local rectangle of a screen-space rect padded for centered
+    /// strokes, dashes and anti-aliasing — the same translation the painter
+    /// applies in `draw` and in the selection chrome.
+    private func paintedRect(_ rect: Rect, pad: Double) -> NSRect {
+        NSRect(
+            x: rect.minX - screen.origin.x - pad,
+            y: rect.minY - screen.origin.y - pad,
+            width: rect.size.width + pad * 2,
+            height: rect.size.height + pad * 2
+        )
+    }
+
     // MARK: - Coordinate mapping
 
     /// Converts a point in the view's coordinate space into screen space.
@@ -351,8 +392,13 @@ public final class AnnotationCanvasView: NSView {
         onDragUpdated?(point)
 
         if tool.isDragBased {
+            // The stroke is prefix-stable: growing it only adds a segment
+            // inside the new hull bounds. Repaint where the painted area
+            // was and where it now is; the pad covers the stroke reaching
+            // past the path plus soft/anti-aliased edges.
+            let previous = inProgress?.bounds
             inProgress = makeAnnotation(from: dragPoints)
-            needsDisplay = true
+            markDirty(between: previous, and: inProgress?.bounds, pad: lineWidth / 2 + 4)
         }
     }
 
@@ -442,16 +488,37 @@ public final class AnnotationCanvasView: NSView {
     private func updateSelectionGesture(to point: Point) {
         switch selectionGesture {
         case .marquee(let start):
+            let previous = marqueeRect
             marqueeRect = Annotation.dragBounds(from: start, to: point)
-            needsDisplay = true
+            // The pad covers the dashed 2pt border and its 0.10 fill.
+            markDirty(between: previous, and: marqueeRect, pad: 6)
         case .move(let start, let originals):
             var delta = Vector(dx: point.x - start.x, dy: point.y - start.y)
             delta = clampedTranslation(delta, for: originals)
             moveDelta = delta
+            let previous = movePreview
             movePreview = Dictionary(uniqueKeysWithValues: originals.map {
                 ($0.id, $0.moved(by: delta))
             })
-            needsDisplay = true
+            // The copies travel as a group. The painted area transitions
+            // from every original's bounds (where the ink was) to the moved
+            // copy's bounds (where it now is), unioned over the whole group
+            // since the delta may cross either way. The pad covers the ink's
+            // stroke reach and the selection chrome (dashed outline inset
+            // 3 at width 2).
+            let pad = max(lineWidth / 2 + 4, 8)
+            var rect: NSRect?
+            for original in originals {
+                let fromRect = paintedRect(original.bounds, pad: pad)
+                rect = rect?.union(fromRect) ?? fromRect
+                if let shown = previous[original.id] ?? movePreview[original.id] {
+                    let toRect = paintedRect(shown.bounds, pad: pad)
+                    rect = rect?.union(toRect) ?? toRect
+                }
+            }
+            if let rect {
+                setNeedsDisplay(rect)
+            }
         case .none:
             break
         }
