@@ -96,6 +96,29 @@
 
 ## Registro de decisiones
 
+- **2 nov 2026** — **#38 hecho: M4 + M7 + ⌘Q/⌘W** (el owner eligió
+  "M4 + M7" y "Fix ⌘Q/⌘W" juntas, como ronda de deuda de bajo riesgo).
+  (1) **M4 — ancla primaria**: nuevo `PrimaryScreen` público en
+  OvermarkCapture —la pantalla anclada en (0, 0), con fallback a la
+  primera—; `WindowRecordingSource.appKitFrame` y
+  `CursorTracker.toAppKitSpace` comparten la misma definición en vez de
+  confiar en el orden de `NSScreen.screens` (que no garantiza nada).
+  Core queda CG-puro: el helper vive en Capture, que ambos módulos ya
+  importan. (2) **M7 — una enumeración por captura**:
+  `capture(displayID:)` ya no hace el segundo pase de `findDisplay`
+  (display y ventanas propias salen del mismo content); nueva batch
+  `capture(displayIDs:)` usada por `toggleFreeze` (antes 2 enumeraciones
+  × N pantallas); `captureAllDisplays` comparte el helper privado
+  `snapshots(for:excludingWindows:)`. (3) **⌘Q/⌘W vivos durante la
+  captura de atajos**: el monitor ahora devuelve el evento (nil =
+  consumido) y las ⌘ solas de Q/W/M/H —los aceleradores del menú
+  propio— desactivan la captura con mensaje, y viajan al menú del app.
+  Sin tests nuevos (AppKit y permisos ScreenCaptureKit no son headless;
+  convención de rondas UI). Métricas intactas: 171 + 24. Queda en
+  deuda de la revisión solo **M6** (invalidación por dirty-rect, la
+  más pesada) más los residuos bajos (#9 escena Settings muerta,
+  checklist de GitHub, cert Developer ID).
+
 - **28 oct 2026** — **#37 hecho: quick-wins de la deuda del review** (el
   owner eligió arrancar con la lista conocida). (1) **Fade seguro**:
   cortar el auto-borrado a mitad (o apagar la preferencia mientras corre)

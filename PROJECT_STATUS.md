@@ -557,6 +557,33 @@ presentaciones, sin congelar el escritorio.
     realineaciones cosméticas de L10n. Métricas: **171** pruebas (25
     suites) + 24 XCTest.
 
+38. Segunda ronda de la deuda de la revisión externa (`49b317b`, el
+    owner eligió "M4 + M7 + fix ⌘Q/⌘W"): (1) **M4 — ancla de pantalla
+    primaria unificada**: nuevo `PrimaryScreen` (OvermarkCapture,
+    público) resuelve la pantalla anclada en (0, 0) —no la primera de
+    `NSScreen.screens`, que no garantiza orden— y los tres puntos que
+    mapeaban geometría global comparten la misma definición:
+    `WindowRecordingSource.appKitFrame` (grabación de ventana),
+    `CursorTracker.toAppKitSpace` (overlays) y el comentario de
+    `contentFrameAppKit` quedan coherentemente anclados; OvermarkCore
+    sigue CG-puro (Resolución: el helper vive en Capture, que ambos ya
+    importan). (2) **M7 — una sola enumeración de `SCShareableContent`
+    por captura**: `capture(displayID:)` ya no llama `findDisplay` (del
+    content fresco sale el display y la lista de ventanas propias),
+    nueva API batch `capture(displayIDs:)` para `toggleFreeze` (antes
+    enumeraba 2×N pantallas), `captureAllDisplays()` pasa por el helper
+    privado `snapshots(for:excludingWindows:)` (skips tolerantes
+    iguales); la coordinadora consume el batch. (3) **⌘Q/⌘W vivos**:
+    el monitor del panel Atajos ya no traga todo — `handleKeyDown`
+    devuelve el evento (nil = consumió) y las combinaciones ⌘ solas de
+    los aceleradores del menú (Q/W/M/H, detectadas por keycode con la
+    máscara device-independent, el mismo patrón de HotKeyManager)
+    desactivan la captura con mensaje válido y pasan al menú de la app
+    (antes: ⌘Q sin salir, ⌘W sin cerrar, y ⌘M/⌘H se asignaban). Cadena
+    nueva es/en en el diccionario. Sin tests nuevos (AppKit/topología
+    de pantallas y permisos de ScreenCaptureKit no corren headless;
+    convención de rondas UI previas). Métricas intactas: **171 + 24**.
+
 `swift build` limpio · `swift test` verde: **171** pruebas Swift Testing (25 suites, incluida
 "Screen choice" y "Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov`
 real; geometría de ventana y mapeo por frame incluidos). Cada ronda corre una sonda
@@ -596,15 +623,16 @@ open build/Overmark.app
   El rastro del cursor exige Accesibilidad (con/Acc) — sin ella, los
   efectos exigibles al puntero (lupa/anillo/hueco) no se queman ese frame.
 - Escena `Settings` de SwiftUI muerta (se usa ventana propia) — código vivo pero residual.
-- Deuda de la revisión 33 (baja prioridad): el mapeo de pantallas de la
-  grabación de ventana usa `NSScreen.screens.first` (el rastreador de cursor
-  usa el ancla correcta (0,0) — unificar); un fade cancelado a mitad puede
-  dejar opacidad parcial permanente; los overlays del cursor invalidan todo
-  el lienzo en cada mouse-move; cada captura enumera `SCShareableContent`
-  dos veces; fallos de disco del autosave pasan en silencio; undo/redo del
-  menú usa `autoenablesItems` (los ítems exigen validación real); el monitor
-  de captura de atajos armado se come ⌘Q/⌘W; el probe de diagnóstico vive en
-  el binario release.
+- Deuda de la revisión 33 (baja prioridad): ~~mapear pantallas con
+  `NSScreen.screens.first` (unificar con el ancla (0,0) — M4, hecho en
+  `49b317b`)~~; ~~un fade cancelado a mitad deja opacidad parcial~~
+  (hecho en `e0df1cf`); **invalidación de todo el canvas en cada
+  mouse-move de la capa del cursor** (M6 — queda, la más pesada de la
+  lista); ~~doble enumeración de `SCShareableContent` por captura
+  (M7, hecho en `49b317b`)~~; ~~fallos de disco silenciosos~~ (hecho
+  en `e0df1cf`); ~~`autoenablesItems`~~ (hecho en `e0df1cf`); ~~el
+  monitor de atajos se come ⌘Q/⌘W (hecho en `49b317b`)~~; el probe de
+  diagnóstico vive en el binario release.
 
 ## Si lo subimos a GitHub (checklist para cuando toque)
 
