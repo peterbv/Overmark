@@ -584,6 +584,42 @@ presentaciones, sin congelar el escritorio.
     de pantallas y permisos de ScreenCaptureKit no corren headless;
     convención de rondas UI previas). Métricas intactas: **171 + 24**.
 
+39. Tercera ronda de la deuda de la revisión externa (`255a655` +
+    `0842d4f`, el owner eligió "M6 dirty-rect + #9 Settings"): (1)
+    **#9 — escena `Settings` residual eliminada**: el struct
+    `OvermarkApp: App` (cuyo `body` era solo `Settings { SettingsView }`,
+    la única escena que quedaba) desaparece; `@main` vive en
+    `AppDelegate` con bootstrap manual (`static func main()`:
+    `NSApplication.shared` → delegate → `run()`), sin que el bundle
+    declare escenas (`NSPrincipalClass NSApplication`, sin storyboard);
+    todas las superficies SwiftUI ya se hospedaban con `NSHostingView`
+    en ventanas del propio delegate (settings flotante en
+    statusBar+1, onboarding), así que nada más cambia de flujo.
+    Verificado en runtime: la sonda `OVERMARK_PROBE=1` completa sus 39
+    pasos y sale limpia con el nuevo arranque. (2) **M6 — invalidación
+    por rects sucios**: los once sitios de `needsDisplay = true` que
+    repintaban la pantalla entera por mouse-move/ticker ahora marcan solo la unión de la región pintada
+    *antes* y *después* del cambio — `CursorEffectView` (OvermarkCursor)
+    calcula con helpers (`discRect`/`effectsRect`/`lensRect`/
+    `pulseRect`/`trailRect`, pads por efecto: radio + borde/2 + AA, halo
+    2.75×laserRadius, lente zoomSize/2 + borde 3, pulso 1.9×radio en
+    crecimiento) los discos del hueco del spotlight, anillo, halo del
+    láser, cuadrado de la lente (colocación espejo incluida) y el
+    recorrido del pulso; el trail agrega los discos de las muestras que
+    **purga antes de mutar** para no dejar "fantasmas" pintados, y el
+    ticker cubre toda la cola viva + punto. `AnnotationCanvasView`
+    (OvermarkOverlay) invalida solo la progresión del gesto: trazo
+    línea-a-línea (hull viejo ∪ nuevo con pad `lineWidth/2 + 4` — el
+    pintor es prefijo-estable), marco de selección (pad 6) y el grupo
+    movido (unión por-anotación de original ∪ copia movida, pad
+    `max(lineWidth/2 + 4, 8)` que cubre el chrome discontinuo); los
+    didSet estructurales (anotaciones, herramienta, pizarra, fondo)
+    mantienen repaint completo por ser eventos raros. El pintor es
+    determinista en su estado y AppKit recorta `draw` al rect marcado,
+    así que la zona intocada del rect re-deriva píxeles idénticos. Sin
+    tests nuevos (la topología de AppKit no corre headless; convención
+    de rondas UI) — métricas intactas **171 + 24** y sonda verde.
+
 `swift build` limpio · `swift test` verde: **171** pruebas Swift Testing (25 suites, incluida
 "Screen choice" y "Toolbar dock") + **24** XCTest del grabador (frames sintéticos → `.mov`
 real; geometría de ventana y mapeo por frame incluidos). Cada ronda corre una sonda
@@ -622,17 +658,18 @@ open build/Overmark.app
   que cambia de aspecto puede estirarse levemente — medido, no bandas).
   El rastro del cursor exige Accesibilidad (con/Acc) — sin ella, los
   efectos exigibles al puntero (lupa/anillo/hueco) no se queman ese frame.
-- Escena `Settings` de SwiftUI muerta (se usa ventana propia) — código vivo pero residual.
+- Escena `Settings` de SwiftUI muerta (se usa ventana propia) — ~~código vivo pero residual~~ (eliminada en `255a655`: `@main` manual en AppDelegate, el bundle ya no declara la escena).
 - Deuda de la revisión 33 (baja prioridad): ~~mapear pantallas con
   `NSScreen.screens.first` (unificar con el ancla (0,0) — M4, hecho en
   `49b317b`)~~; ~~un fade cancelado a mitad deja opacidad parcial~~
-  (hecho en `e0df1cf`); **invalidación de todo el canvas en cada
-  mouse-move de la capa del cursor** (M6 — queda, la más pesada de la
-  lista); ~~doble enumeración de `SCShareableContent` por captura
+  (hecho en `e0df1cf`); ~~invalidación de todo el canvas en cada
+  mouse-move de la capa del cursor (M6, hecho en `0842d4f`)~~;
+  ~~doble enumeración de `SCShareableContent` por captura
   (M7, hecho en `49b317b`)~~; ~~fallos de disco silenciosos~~ (hecho
   en `e0df1cf`); ~~`autoenablesItems`~~ (hecho en `e0df1cf`); ~~el
-  monitor de atajos se come ⌘Q/⌘W (hecho en `49b317b`)~~; el probe de
-  diagnóstico vive en el binario release.
+  monitor de atajos se come ⌘Q/⌘W (hecho en `49b317b`)~~ — **la
+  lista queda cerrada**; el probe de diagnóstico vive en el binario
+  release (único residual).
 
 ## Si lo subimos a GitHub (checklist para cuando toque)
 

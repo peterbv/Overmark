@@ -96,6 +96,29 @@
 
 ## Registro de decisiones
 
+- **2 nov 2026** — **#39 hecho: M6 + #9, la deuda de la revisión queda
+  cerrada** (el owner eligió "M6 dirty-rect + #9 Settings"). (1)
+  **#9 — escena residual eliminada** (`255a655`): el struct
+  `OvermarkApp: App` —cuyo `body` era solo `Settings { SettingsView }`,
+  la única escena que quedaba y una ventana que se abría *debajo* de
+  los overlays— desaparece; `@main` pasa a `AppDelegate` con
+  bootstrap manual (NSApplication → delegate → run). Las superficies
+  SwiftUI ya se hospedaban con `NSHostingView` en ventanas propias del
+  delegate (settings flotante statusBar+1, onboarding), así el bundle
+  ya no declara escenas. Sonda OVERMARK_PROBE completa y limpia con
+  el nuevo arranque. (2) **M6 — rects sucios** (`0842d4f`): los once
+  sitios de repaint completo por mouse-move/ticker de
+  `CursorEffectView` (y los 3 progresivos de `AnnotationCanvasView`)
+  ahora marcan la unión de la región pintada antes y después del
+  cambio — discos de spotlight/anillo/láser/lente (colocación espejo
+  incluida), recorrido del pulso, cola del láser con los discos de las
+  muestras purgadas (anti-"fantasmas"), hull viejo∪nuevo del trazo
+  (prefijo-estable), marquee y grupo movido (original ∪ copia, con el
+  chrome dentro del pad). Los didSet estructurales siguen full por ser
+  eventos raros. Métricas intactas: **171 + 24**, sonda verde.
+  Deuda de la revisión 33: ~~cerrada por completo~~ (queda solo el
+  probe de diagnóstico dentro del binario release, como nota).
+
 - **2 nov 2026** — **#38 hecho: M4 + M7 + ⌘Q/⌘W** (el owner eligió
   "M4 + M7" y "Fix ⌘Q/⌘W" juntas, como ronda de deuda de bajo riesgo).
   (1) **M4 — ancla primaria**: nuevo `PrimaryScreen` público en
