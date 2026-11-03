@@ -680,7 +680,13 @@ open build/Overmark.app
 
 ## Checklist GitHub (pendiente)
 
-- [ ] Elegir nombre final del bundle/app y LICENSE (¿MIT?).
+- [x] Elegir nombre final del bundle/app y LICENSE (¿MIT?).
+  ```text
+  ✓ 3 nov 2026 — nombre Overmark (desde la ronda de renombre) y LICENSE
+    MIT (holder peterbv). AGENTS.md agregado como guía para agentes de
+    código; la línea de "facilidades IA" de producto vive en el banco
+    del ROADMAP (URL scheme / AppleScript / MCP).
+  ```
 - [ ] README bilingüe (es/en) con GIFs de la barra, efectos y lupa.
 - [ ] Firma real: sustituir ad-hoc por "Developer ID Application" (o instruir
       clic-derecho → Abrir para sortear Gatekeeper) y explicar el FAQ de permisos TCC.

@@ -78,8 +78,8 @@
 | # | Idea | Prioridad | Estado | Notas |
 |---|---|---|---|---|
 | 8 | **Firma Developer ID real** | Alta (si distribuimos) | **Hecho (infra)** | Pipeline listo con cert ausente: `build-app.sh` autodetecta el primer "Developer ID Application" del llavero (_OVERRIDE ad-hoc con `OVERMARK_SIGN_IDENTITY="-"`), notarización opcional (`--notary-profile` / `OVERMARK_NOTARY_PROFILE` → `notarytool submit --wait` + `stapler staple` al DMG) y guía completa en `Support/DISTRIBUTION.md`. El requisito ad-hoc estable (`designated => identifier`, keys TCC) sigue para builds sin cert. Falta únicamente comprar el Developer ID. |
-| 9 | **Limpiar Settings residual de SwiftUI** | Baja | Propuesto | La escena `Settings` quedó muerta (se usa ventana propia); código vivo pero residual. |
-| 10 | **Checklist GitHub** | Media (al publicar) | Parcial | Repo público creado + push inicial completo (3 nov 2026, `github.com/peterbv/Overmark` vía SSH alias `github-peterbv`). Pendiente: CI (Actions en runner macOS), releases con DMG verificable (`codesign --verify --deep`), README bilingüe con GIFs, LICENSE (¿MIT?), proteger main, Sparkle si hay usuarios reales. |
+| 9 | **Limpiar Settings residual de SwiftUI** | Baja | **Hecho** | La escena `Settings` quedó muerta (se usa ventana propia) — eliminada en `255a655`: `@main` manual en `AppDelegate`, el bundle ya no declara escenas. |
+| 10 | **Checklist GitHub** | Media (al publicar) | Parcial | Repo público creado + push inicial completo (3 nov 2026, `github.com/peterbv/Overmark` vía SSH alias `github-peterbv`). **LICENSE MIT** elegido y archivo agregado, `AGENTS.md` para agentes de código creado (ambos 3 nov 2026). Pendiente: CI (Actions en runner macOS), releases con DMG verificable (`codesign --verify --deep`), README bilingüe con GIFs, proteger main, Sparkle si hay usuarios reales. |
 
 ## 4. Banco de ideas (sin compromiso, a evaluar)
 
@@ -93,8 +93,39 @@
 - **i18n**: más idiomas aparte de es/en (los strings ya están centralizados
   en `L10n.swift`).
 - **Multiventana de grabación**: grabar dos ventanas en paralelo.
+- **Facilidades IA (nueva línea para evaluar)**: que un agente de IA
+  (ChatGPT, Claude, un MCP client en el Mac…) pueda dirigir Overmark sin
+  tocar la pantalla — superficie de control para automatización y
+  presentaciones guiadas. Tres candidatos ordenados por peso:
+  1. **URL scheme `overmark://`** (ligero): `start/stop/tool/color/
+     board/freeze/capture` — un clic o `open` del sistema basta; sin
+     superficie de red.
+  2. **AppleScript dictionary / CLI** (medio): control completo desde
+     Terminal o scripts de presentación; encaja con el quit-AppleScript
+     ya manejado en `applicationShouldTerminate`.
+  3. **Servidor MCP local** (pesado, máximo valor): herramientas
+     tipadas (`start_session`, `set_tool`, `annotate`, `capture`) sobre
+     stdio/socket para que cualquier MCP client (Claude Desktop, etc.)
+     orqueste una presentación anotada entera. Requiere decidir
+     transporte y seguridad (solo localhost / unix socket).
+- **AGENTS.md del repo** (hecho, nivel contribución): los agentes que
+  trabajan el código ya tienen guía en `AGENTS.md`; este ítem es el
+  nivel **producto** de la misma idea.
 
 ## Registro de decisiones
+
+- **3 nov 2026** — **Repo público + LICENSE MIT + facilidades IA**.
+  (1) Repo público `github.com/peterbv/Overmark` con push inicial
+  completo (SSH con llave dedicada vía alias `github-peterbv`; la llave
+  default de la máquina queda para la cuenta de trabajo useflowy).
+  (2) **LICENSE MIT** (elección del owner; holder `peterbv`).
+  (3) **AGENTS.md**: guía de contribución para agentes de código (docs
+  de verdad, build/sonda, estructura de módulos, convenciones); nivel
+  "contribución" de la línea de facilidades IA. (4) El owner plantea la
+  línea de **facilidades IA de producto** ("como ahora todo se inclina a
+  usarse con ia") — quedan en el banco tres candidatos a evaluar: URL
+  scheme `overmark://` (ligero), AppleScript/CLI (medio) y servidor MCP
+  local (pesado, máximo valor).
 
 - **2 nov 2026** — **#39 hecho: M6 + #9, la deuda de la revisión queda
   cerrada** (el owner eligió "M6 dirty-rect + #9 Settings"). (1)
