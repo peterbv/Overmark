@@ -79,7 +79,7 @@
 |---|---|---|---|---|
 | 8 | **Firma Developer ID real** | Alta (si distribuimos) | **Hecho (infra)** | Pipeline listo con cert ausente: `build-app.sh` autodetecta el primer "Developer ID Application" del llavero (_OVERRIDE ad-hoc con `OVERMARK_SIGN_IDENTITY="-"`), notarización opcional (`--notary-profile` / `OVERMARK_NOTARY_PROFILE` → `notarytool submit --wait` + `stapler staple` al DMG) y guía completa en `Support/DISTRIBUTION.md`. El requisito ad-hoc estable (`designated => identifier`, keys TCC) sigue para builds sin cert. Falta únicamente comprar el Developer ID. |
 | 9 | **Limpiar Settings residual de SwiftUI** | Baja | Propuesto | La escena `Settings` quedó muerta (se usa ventana propia); código vivo pero residual. |
-| 10 | **Checklist GitHub** | Media (al publicar) | Propuesto | CI (Actions en runner macOS), releases con DMG verificable (`codesign --verify --deep`), README bilingüe con GIFs, LICENSE (¿MIT?), `git remote` + proteger main, Sparkle si hay usuarios reales. |
+| 10 | **Checklist GitHub** | Media (al publicar) | Parcial | Repo público creado + push inicial completo (3 nov 2026, `github.com/peterbv/Overmark` vía SSH alias `github-peterbv`). Pendiente: CI (Actions en runner macOS), releases con DMG verificable (`codesign --verify --deep`), README bilingüe con GIFs, LICENSE (¿MIT?), proteger main, Sparkle si hay usuarios reales. |
 
 ## 4. Banco de ideas (sin compromiso, a evaluar)
 

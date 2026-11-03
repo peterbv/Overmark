@@ -671,7 +671,14 @@ open build/Overmark.app
   lista queda cerrada**; el probe de diagnóstico vive en el binario
   release (único residual).
 
-## Si lo subimos a GitHub (checklist para cuando toque)
+## Publicación en GitHub
+
+- [x] Repo público creado y primer push (3 nov 2026): `github.com/peterbv/Overmark`
+  (remote `origin` = SSH alias `github-peterbv`, llave dedicada
+  `id_ed25519_peterbv` — la llave default de la máquina queda para la
+  cuenta de trabajo useflowy; ver `~/.ssh/config`).
+
+## Checklist GitHub (pendiente)
 
 - [ ] Elegir nombre final del bundle/app y LICENSE (¿MIT?).
 - [ ] README bilingüe (es/en) con GIFs de la barra, efectos y lupa.
